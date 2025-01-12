@@ -3,6 +3,7 @@
 ## Introduction
 
 **Your AI-powered assistant for effortless data science!**
+
 The Junior Data Scientist CLI is an AI-powered command-line tool designed to take the grunt work out of your data science projects. Think of it as your very own junior data scientist—ready to handle the baseline tasks so you can focus on solving high-level problems.
 
 ## Installing the Tool
@@ -10,7 +11,7 @@ The Junior Data Scientist CLI is an AI-powered command-line tool designed to tak
 To install the tool, clone the repository and install it in editable mode:
 
 ```bash
-git clone https://github.com/yourusername/junior-data-scientist.git
+git clone https://github.com/vishalrk1/junior-scientist-agent.git
 cd junior-data-scientist
 pip install -e .
 ```
