@@ -25,11 +25,11 @@ def new(name):
     
     platform = questionary.select(
         "Select you LLM Provider",
-        choices=['OpenAI'],
+        choices=['openai'],
     ).ask()
 
     api_key = None
-    if platform == "OpenAI":
+    if platform == "openai":
         api_key = questionary.text("Enter your OpenAI API key").ask()
 
     project_dir = os.path.join(os.getcwd(), "projects", name)
@@ -47,5 +47,17 @@ def new(name):
         border_style="green"
     ))
 
-if __name__ == "__main__":
+@main.command()
+@click.pass_context
+@click.argument('mode', default="base")
+@click.option('--model', default=None, help='The model to use for the chat.')
+def start(ctx, mode, model):
+    """Start the workflow"""
+    if mode == "base":
+        from buddy.workflow.base import base
+        return base(os.getcwd(), model)
+    else:
+        console.print("Invalid mode", style="bold red")
+
+if __name__ == "__main__": 
     main()

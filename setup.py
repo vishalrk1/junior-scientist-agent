@@ -1,16 +1,18 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="databuddy",
+    name="buddy",  # Changed from databuddy
     version="0.0.1",
     packages=find_packages(),
     install_requires=[
         "click",
         "rich",
+        "questionary",
+        "PyYAML",
     ],
     entry_points={
         "console_scripts": [
-            "databuddy = databuddy.cli:cli",
+            "buddy=buddy.cli:main",  # Changed from databuddy.cli:cli to buddy.cli:main
         ],
     },
     include_package_data=True,

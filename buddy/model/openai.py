@@ -8,7 +8,7 @@ class OpenAIModel:
         self.model = model if model else "gpt-4o-mini"
         self.api_key = api_key
         self.temperature = temperature
-        self.client = openai.Client(model=model, api_key=api_key)
+        self.client = openai.Client(api_key=api_key)
     
     def query(self, chat_history, **kwargs):
         parameters = kwargs
