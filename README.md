@@ -35,8 +35,8 @@ buddy start
 
 # TODO
 
-[ ] Add caching for prompts and reports on project level
-[x] Generating reports for data cleaning stpes and business insights for csv files
-[x] load/save reports
-[ ] create api end points `buddy server`
-[ ] create frontend to interact with agents
+- [ ] Add caching for prompts and reports on project level
+- [x] Generating reports for data cleaning stpes and business insights for csv files
+- [x] load/save reports
+- [ ] create api end points `buddy server`
+- [ ] create frontend to interact with agents
