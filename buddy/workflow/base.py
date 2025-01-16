@@ -4,8 +4,8 @@ from rich.console import Console
 from rich.panel import Panel
 
 from buddy.model import load_model
-from buddy.utils import print_in_box, ask_text
-from buddy.agents import AdviseAgent
+from buddy.utils import print_in_box, ask_text, dataframe_validator
+from buddy.agents import AdviseAgent, AnalyzerAgent
 
 def ask_data(data_str: str):
     """
@@ -29,12 +29,22 @@ def base(work_dir: str, model=None):
     console = Console()
     model = load_model(work_dir, model)
 
-    # defining the advision agent
+    # defining the agents
     advisor = AdviseAgent(model, console)
+    analyzer = AnalyzerAgent(model, console)
+
     dataset = ask_text("What is the dataset you are working with?")
     if not dataset:
         print_in_box("Please provide a valid dataset.", title="Data Buddy", color="red")
         return
+    
+    try:
+        df = dataframe_validator(dataset)
+    except Exception as e:
+        print_in_box(f"Error validating dataset: {e}", title="Data Buddy", color="red")
+        return
+    
+    report = analyzer.analyze_data(df=df)
     dataset = advisor.exlore_dataset(dataset)
 
     requirements = ask_text("What are the additional requirements for the project?")

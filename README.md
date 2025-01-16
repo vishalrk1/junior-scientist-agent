@@ -21,7 +21,22 @@ pip install -e .
 You can create a new project using the following command:
 
 ```bash
-python buddy.cli new --name <project_name>
+buddy new --name <project_name>
 ```
 
 Replace `<project_name>` with the desired name for your new project.
+
+## Starting project and chat
+
+```bash
+cd projects/<project_name>
+buddy start
+```
+
+# TODO
+
+[ ] Add caching for prompts and reports on project level
+[x] Generating reports for data cleaning stpes and business insights for csv files
+[x] load/save reports
+[ ] create api end points `buddy server`
+[ ] create frontend to interact with agents
