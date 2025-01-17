@@ -35,7 +35,7 @@ class PlannerAgent:
         self.json_mode_prompt = """
         Provide the plan in JSON format with the following structure:
         {
-            "model_type": "Recommended model type with brief justification",
+            "model": "Recommended models with brief justification",
             "tasks": [
                 {
                     "task": "Task name",
@@ -83,13 +83,13 @@ class PlannerAgent:
         self.console.print("[yellow]Warning: No advisor report found.")
         return None
             
-    def _create_system_prompt(self) -> str:
+    def _create_system_prompt(self, model_or_algorithm=None) -> str:
         if not self.advisor_report:
-            return """You are an ML Project Planning Expert..."""  # Add a default prompt
-            
+            return """You are an ML Project Planning Expert. Please provide your response in JSON format."""
+
         return f"""
         You are an ML Project Planning Expert. Your task is to create a detailed plan for developing 
-        a machine learning model based on the provided data analysis results.
+        a machine learning model based on the provided data analysis results. Please provide your response in JSON format.
 
         ## Core Principles
         1. DEPTH OF REASONING 
@@ -103,16 +103,33 @@ class PlannerAgent:
         - Frequently backtrack and revise
 
         Given the data cleaning insights and business insights from the analysis, create a structured plan that includes:
-        1. Choose the best performing model from ${self.advisor_report.model_or_algorithm} based on the analysis.
+        1. Choose the best performing model from ${model_or_algorithm if model_or_algorithm else self.advisor_report.model_or_algorithm} based on the analysis.
         2. Specific & break down coding tasks for implementation and training the model on ${self.advisor_report.frameworks} using ${self.advisor_report.training_method}.
         3. Explain the key evaluation metrics like ${self.advisor_report.evaluation_metric} and the device to be used for training.
         4. use the data summary to create a detailed plan that includes the limitations.
         5. break down the process inro small steps with detailed description and dependencies.
-        """ + self.json_mode_prompt
+        """ + """
+        Please respond with a valid JSON object using the following structure:
+        {
+            "model": "Recommended models with brief justification",
+            "tasks": [
+                {
+                    "task": "Task name",
+                    "description": "Detailed description with specific implementation instructions",
+                    "dependencies": ["dependent_task_names"]
+                }
+            ],
+            "evaluation_metrics": ["list of recommended metrics"],
+            "considerations": {
+                "data_quality": "Considerations from data cleaning analysis",
+                "limitations": "Potential limitations to be aware of"
+            }
+        }
+        """
             
     def create_planning_context(self, analysis_report: AnalysisReport) -> str:
         """Creates planning context from analyzer report"""
-        context = "Based on the following analysis results:\n\n"
+        context = "Please provide the development plan in JSON format based on the following analysis results:\n\n"
         
         for result in analysis_report.results:
             context += f"\n{result.category.upper()} INSIGHTS:\n"
@@ -126,7 +143,7 @@ class PlannerAgent:
         # Display model type
         self.console.print(Panel(
             f"[bold blue]ML Development Plan[/bold blue]\n\n"
-            f"[bold]Recommended Model:[/bold] {plan.model_type}",
+            f"[bold]Recommended Model:[/bold] {plan.model}",
             title="Plan Overview"
         ))
 
@@ -166,10 +183,10 @@ class PlannerAgent:
 
         self.console.print(considerations_table)
 
-    def generate_plan(self):
+    def generate_plan(self, model_or_algorithm=None) -> MLPlan:
         with self.console.status("[bold green]Generating ML development plan...") as status:
             chat_history = [
-                {"role": "system", "content": self._create_system_prompt()},
+                {"role": "system", "content": self._create_system_prompt(model_or_algorithm)},
                 {"role": "user", "content": self.create_planning_context(self.analysis_report)}
             ]
             
@@ -188,7 +205,7 @@ class PlannerAgent:
             ]
 
             plan = MLPlan(
-                model_type=plan_dict["model_type"],
+                model=plan_dict["model"],
                 tasks=tasks,
                 evaluation_metrics=plan_dict["evaluation_metrics"],
                 considerations=plan_dict["considerations"]
@@ -196,3 +213,58 @@ class PlannerAgent:
 
             self.display_plan(plan)
             return plan
+    
+    def chat(self, plan: MLPlan) -> MLPlan:
+        while True:
+            action = questionary.select(
+                "\nWould you like to modify the plan?",
+                choices=[
+                    "Continue with current plan",
+                    "Add task",
+                    "Modify model",
+                    "Add consideration",
+                    "Exit"
+                ]
+            ).ask()
+
+            if action == "Continue with current plan" or action == "Exit":
+                break
+            elif action == "Add task":
+                task_name = questionary.text("Enter task name:").ask()
+                description = questionary.text("Enter task description:").ask()
+                dependencies = questionary.text("Enter dependencies (comma-separated):").ask()
+                
+                new_task = MLTask(
+                    task=task_name,
+                    description=description,
+                    dependencies=dependencies.split(",") if dependencies else []
+                )
+                plan.tasks.append(new_task)
+            elif action == "Modify model":
+                model = questionary.text("Enter new model that you want to use").ask()
+                self.generate_plan(model_or_algorithm=model)
+            elif action == "Add consideration":
+                category = questionary.text("Enter consideration category:").ask()
+                details = questionary.text("Enter consideration details:").ask()
+                plan.considerations[category] = details
+        
+        return plan
+
+    def save_plan(self, plan: MLPlan):
+        """
+        Saves the final ML development plan to the 'ml_plans' directory as a JSON file.
+        """
+        plan_dir = Path("ml_plans")
+        plan_dir.mkdir(exist_ok=True)
+        dataset_hash = getattr(self.analysis_report, "dataset_hash", "unknown_dataset")
+        plan_file = plan_dir / f"ml_plan_{dataset_hash}.json"
+
+        with open(plan_file, "w", encoding="utf-8") as f:
+            json.dump({
+                "model": plan.model,
+                "tasks": [t.__dict__ for t in plan.tasks],
+                "evaluation_metrics": plan.evaluation_metrics,
+                "considerations": plan.considerations
+            }, f, indent=4)
+        
+        self.console.print(f"[green]ML plan saved to {plan_file}[/green]")

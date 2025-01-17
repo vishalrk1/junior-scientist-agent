@@ -37,7 +37,7 @@ class MLTask:
 @dataclass
 class MLPlan:
     """Dataclass for storing the complete ML development plan"""
-    model_type: str
+    model: str
     tasks: List[MLTask]
     evaluation_metrics: List[str]
     considerations: Dict[str, str]

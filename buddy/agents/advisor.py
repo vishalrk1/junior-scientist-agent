@@ -11,10 +11,6 @@ from buddy.dataclass import AdvisorReport
 
 def process_report(requirement: str, suggestions: dict):
     return textwrap.dedent(f"""
-    {requirement}
-
-    [green]Dataset Summary:[/green] {suggestions.get('data_summary')}
-
     [green]Suggestion Summary:[/green] {suggestions.get('suggestion')}
 
     [green]Task:[/green] {suggestions.get('task')}
@@ -22,8 +18,6 @@ def process_report(requirement: str, suggestions: dict):
     [green]Training Strategy:[/green] {suggestions.get('training_method')}
     [green]Evaluation Metric:[/green] {suggestions.get('evaluation_metric')}
     [green]Training Device:[/green] {suggestions.get('device')}
-
-    [green]Serving Strategy:[/green] {suggestions.get('serving_method')}
 
     [green]Reference:[/green] {suggestions.get('reference')}
     [green]Dependency:[/green] {suggestions.get('frameworks')}
@@ -112,6 +106,77 @@ class AdviseAgent:
         self.sys_prompt += self.json_mode_prompt  # add the json mode prompt
         self.chat_history.append({"role": "system", "content": self.sys_prompt})
 
+        self.default_requirements = {
+            "task_type": None,
+            "performance_metric": None,
+            "constraints": None,
+            "business_goal": None
+        }
+
+        self.requirement_prompts = {
+            "task_type": "What type of machine learning task are we dealing with? (e.g., classification, regression, clustering)",
+            "performance_metric": "What metrics are important for measuring success?",
+            "constraints": "Are there any constraints (e.g., speed, memory, interpretability)?",
+            "business_goal": "What is the primary business objective?"
+        }
+
+        self.error_handlers = {
+            "missing_data": self.handle_missing_data,
+            "invalid_requirement": self.handle_invalid_requirement,
+            "model_error": self.handle_model_error
+        }
+
+    def handle_missing_data(self, error):
+        """Handle cases where data is missing"""
+        self.console.print("[yellow]Warning: Missing data detected[/yellow]")
+        alternatives = self.suggest_data_alternatives()
+        return self.process_alternatives(alternatives)
+
+    def handle_invalid_requirement(self, error):
+        """Handle invalid requirements"""
+        self.console.print("[yellow]Warning: Invalid requirement detected[/yellow]")
+        return self.suggest_requirement_fix(error)
+
+    def handle_model_error(self, error):
+        """Handle model-related errors"""
+        self.console.print("[red]Error: Model failed to process request[/red]")
+        return self.suggest_model_alternatives()
+
+    def validate_requirements(self, requirements: dict) -> tuple[bool, list]:
+        """Validate requirements and return status and issues"""
+        issues = []
+        is_valid = True
+        
+        required_fields = ['task_type', 'performance_metric']
+        for field in required_fields:
+            if not requirements.get(field):
+                issues.append(f"Missing {field}")
+                is_valid = False
+        
+        return is_valid, issues
+
+    def enhance_requirements(self, requirements: dict) -> dict:
+        """Enhance requirements with AI-suggested improvements"""
+        enhancement_prompt = f"""
+        Given these requirements: {json.dumps(requirements)}
+        Suggest improvements or additions that could lead to better ML solutions.
+        Focus on practical enhancements that add value.
+        """
+        
+        chat_history = [{"role": "user", "content": enhancement_prompt}]
+        suggestions = json.loads(self.model.query(chat_history, response_format={"type": "json_object"}))
+        
+        return self.merge_requirements(requirements, suggestions)
+
+    def merge_requirements(self, original: dict, suggestions: dict) -> dict:
+        """Merge original requirements with suggestions"""
+        merged = original.copy()
+        for key, value in suggestions.items():
+            if not merged.get(key) and value:
+                if questionary.confirm(f"Add suggested {key}: {value}?").ask():
+                    merged[key] = value
+        return merged
+
     def exlore_dataset(self, dataset: str):
         """
         Explore the dataset and give a summary of the dataset.
@@ -189,6 +254,62 @@ class AdviseAgent:
         with open(report_path, "w") as file:
             json.dump(self.json_report, file, indent=4)
 
+    def extract_requirements(self, text: str) -> dict:
+        """Extract structured requirements from free text"""
+        prompt = """
+        Extract requirements from the following text. If a requirement is not mentioned, 
+        mark it as None. Format as JSON:
+        {
+            "task_type": "identified task or None",
+            "performance_metric": "identified metrics or None",
+            "constraints": "identified constraints or None",
+            "business_goal": "identified goal or None"
+        }
+        Text: """ + text
+
+        chat_history = [{"role": "user", "content": prompt}]
+        response = self.model.query(chat_history, response_format={"type": "json_object"})
+        return json.loads(response)
+
+    def gather_missing_requirements(self, requirements: dict) -> dict:
+        """Interactively gather missing requirements"""
+        complete_requirements = requirements.copy()
+        
+        for key, value in complete_requirements.items():
+            if not value:
+                if questionary.confirm(f"Would you like to specify {key}?").ask():
+                    complete_requirements[key] = questionary.text(self.requirement_prompts[key]).ask()
+                else:
+                    # Auto-suggest based on dataset and context
+                    suggestion = self.suggest_requirement(key)
+                    if questionary.confirm(f"I suggest '{suggestion}' for {key}. Accept?").ask():
+                        complete_requirements[key] = suggestion
+
+        return complete_requirements
+
+    def suggest_requirement(self, requirement_type: str) -> str:
+        """Suggest requirements based on dataset characteristics and context"""
+        prompt = f"""Based on the dataset and context, suggest a suitable {requirement_type}.
+        Consider: dataset characteristics, common industry practices, and best practices."""
+        
+        chat_history = [{"role": "user", "content": prompt}]
+        return self.model.query(chat_history)
+
+    def get_project_scope(self) -> dict:
+        """Analyze and suggest project scope"""
+        scope_questions = [
+            "What is the project timeline?",
+            "What technical resources are available?"
+        ]
+        
+        scope = {}
+        for question in scope_questions:
+            if questionary.confirm(f"Would you like to specify {question}?").ask():
+                scope[question] = questionary.text(question).ask()
+            else:
+                scope[question] = "Not specified"
+        
+        return scope
 
     def suggest(self, requirements: str):
         """
@@ -197,7 +318,15 @@ class AdviseAgent:
         Args:
             requirements: the user's requirements.
         """
-        self.chat_history.append({"role": "user", "content": requirements})
+        scope = self.get_project_scope()
+        
+        # Add scope to requirements
+        enhanced_requirements = f"""
+        Requirements: {requirements}
+        Project Scope: {json.dumps(scope, indent=2)}
+        """
+        
+        self.chat_history.append({"role": "user", "content": enhanced_requirements})
         with self.console.status("Suggesting the best ML task/model/algorithm..."):
             text = self.model.query(
                 self.chat_history,
@@ -211,17 +340,26 @@ class AdviseAgent:
                 suggestions = json.loads(text)
             except json.JSONDecodeError as e:
                 suggestions = clean_json_string(text)
-
+            
+            # Store the suggestions in json_report
+            self.json_report = suggestions
             return process_report(requirements, suggestions)
     
-    def chat(self, requirements: str):
+    def chat(self, requirements: str = None):
         """
         Users can chat with the advisor.
         Args:
             requirements: the user's requirements.
         """
+        if not requirements:
+            requirements = "Please analyze the dataset and suggest an appropriate ML approach."
 
-        self.report = self.suggest(requirements)
+        extracted_reqs = self.extract_requirements(requirements)
+        complete_reqs = self.gather_missing_requirements(extracted_reqs)
+        
+        # Format complete requirements into a detailed prompt
+        detailed_prompt = self.format_requirements(complete_reqs)
+        self.report = self.suggest(detailed_prompt)
         print_in_box(self.report, title="Data Buddy", color="green")
 
         while True:
@@ -245,3 +383,13 @@ class AdviseAgent:
                 
         self.save_report()
         return self.report
+
+    def format_requirements(self, requirements: dict) -> str:
+        """Format requirements into a detailed prompt"""
+        return f"""Project Requirements Analysis:
+        Task Type: {requirements['task_type']}
+        Performance Metrics: {requirements['performance_metric']}
+        Constraints: {requirements['constraints']}
+        Business Goal: {requirements['business_goal']}
+        
+        Please provide a comprehensive ML solution addressing these requirements."""

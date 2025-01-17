@@ -60,5 +60,29 @@ def start(ctx, mode, model):
     else:
         console.print("Invalid mode", style="bold red")
 
+@main.command()
+@click.option('--host', default='0.0.0.0', help='Host to bind the server to')
+@click.option('--port', default=8000, help='Port to bind the server to')
+@click.option('--reload', is_flag=True, default=False, help='Enable auto-reload on code changes')
+def server(host, port, reload):
+    """Start the Data Buddy API server"""
+    try:
+        import uvicorn
+        console.print(Panel.fit(
+            f"[bold green]Starting Data Buddy API server on {host}:{port}[/]",
+            title="Junior Data Scientist CLI",
+            border_style="green"
+        ))
+        uvicorn.run(
+            "buddy.server.app:app",
+            host=host,
+            port=port,
+            reload=reload,
+            log_level="info"
+        )
+    except Exception as e:
+        console.print(f"[bold red]Failed to start server: {str(e)}[/]")
+        return
+
 if __name__ == "__main__": 
     main()
