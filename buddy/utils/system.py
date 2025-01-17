@@ -47,3 +47,26 @@ def get_config(workdir: str = None) -> Optional[Dict[str, Any]]:
         return None
     with  open(config_path, 'r') as f:
         return yaml.safe_load(f)
+    
+def update_config(dataDict,  workdir=None) -> Optional[Dict[str, Any]]:
+    """
+    Update the configuration file with new fields.
+    :workdir: the project directory.
+    dataDict: the dictionary containing new fields to add.
+    :return: the updated configuration file.
+    """
+    config_dir = os.path.join(workdir or os.getcwd(), ".databuddy")
+    config_path = os.path.join(config_dir, 'config.yml')
+        
+    if not os.path.exists(config_path):
+        return None
+        
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f) or {}
+        
+    config.update(dataDict)
+        
+    with open(config_path, 'w') as f:
+        yaml.safe_dump(config, f)
+        
+    return config

@@ -8,6 +8,8 @@ import questionary
 import yaml
 from pathlib import Path
 
+from buddy.workflow.base import base
+
 console = Console()
 
 @click.group()
@@ -54,7 +56,6 @@ def new(name):
 def start(ctx, mode, model):
     """Start the workflow"""
     if mode == "base":
-        from buddy.workflow.base import base
         return base(os.getcwd(), model)
     else:
         console.print("Invalid mode", style="bold red")

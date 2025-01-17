@@ -36,7 +36,10 @@ buddy start
 # TODO
 
 - [ ] Add caching for prompts and reports on project level
+- [ ] Add global memory module
 - [x] Generating reports for data cleaning stpes and business insights for csv files
 - [x] load/save reports
+- [x] ML workflow planner agent
+- [ ] Chat with planner to improve plan 
 - [ ] create api end points `buddy server`
 - [ ] create frontend to interact with agents

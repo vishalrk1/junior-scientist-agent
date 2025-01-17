@@ -1,6 +1,7 @@
 import json
 import hashlib
 import datetime
+import pickle
 
 import pandas as pd
 from pathlib import Path
@@ -11,19 +12,8 @@ from rich.table import Table
 from rich.markdown import Markdown
 from typing import List, Dict, Any
 
-@dataclass
-class AnalysisResult:
-    """Dataclass for storing analysis results"""
-    category: str
-    steps: str
-
-@dataclass
-class AnalysisReport:
-    """Dataclass for storing analysis report"""
-    dataset_hash: str
-    timestamp: str
-    results: List['AnalysisResult']
-    metadata: Dict[str, Any]
+from buddy.dataclass import AnalysisReport, AnalysisResult
+from buddy.utils import update_config
 
 class AnalyzerAgent:
     def __init__(self, model, console=None, reports_dir="analysis_reports"):
@@ -37,11 +27,23 @@ class AnalyzerAgent:
 
         self.model = model
         self.console = console if console else Console()
-        self.analyze_types = ["data_cleaning", "business_insights"]
+        self.analyze_types = ["data_summary", "data_cleaning", "business_insights"]
         self.report_dir = Path(reports_dir)
         self.report_dir.mkdir(exist_ok=True)
 
         self.prompts = {
+            "data_summary": """
+            <contemplator>
+            Provide a concise summary of this dataset addressing:
+            1. Basic dataset dimensions and structure
+            2. Data types and their distribution
+            3. Key summary statistics
+            4. Notable patterns or characteristics
+            5. Initial data quality observations
+            Keep your response focused and brief.
+            </contemplator>
+            """,
+             
             "data_cleaning": """
             <contemplator>
             Let me analyze this dataset for cleaning needs by considering:
@@ -115,6 +117,30 @@ class AnalyzerAgent:
             self.console.print(f"[red]Error getting model response: {str(e)}")
             return f"Error in analysis: {str(e)}"
     
+    def _get_report_path(self, dataset_hash: str) -> Path:
+        """Get path for report file"""
+        return self.report_dir / f"{dataset_hash}.pkl"
+        
+    def save_report(self, report: AnalysisReport, dataset_hash: str) -> None:
+        """Save analysis report to a file"""
+        report_path = self._get_report_path(dataset_hash)
+        update_config({"dataset_hash": dataset_hash})
+        
+        with open(report_path, "wb") as file:
+            pickle.dump(report, file)
+        self.console.print(f"[green]Analysis report saved to {report_path}")
+
+    def load_report(self, dataset_hash: str) -> AnalysisReport:
+        """Load analysis report from a file"""
+        report_path = self._get_report_path(dataset_hash)
+        if report_path.exists():
+            try:
+                with open(report_path, "rb") as file:
+                    return pickle.load(file)
+            except Exception as e:
+                self.console.print(f"[red]Error loading report: {str(e)}")
+                return None
+    
     def generate_dataset_hash(self, df: pd.DataFrame) -> str:
         """Generate a unique hash for the dataset"""
         data_hash = hashlib.md5()
@@ -165,6 +191,11 @@ class AnalyzerAgent:
         """
         # Generate a unique hash for the dataset
         data_hash = self.generate_dataset_hash(df)
+        existing_report = self.load_report(data_hash)
+
+        if existing_report:
+            self.display_report(existing_report)
+            return existing_report
 
         results = []
         system_prompts = self.create_system_prompt(df)
@@ -196,6 +227,6 @@ class AnalyzerAgent:
             },
         )
 
+        self.save_report(report, data_hash)
         self.display_report(report=report)
-
         return report

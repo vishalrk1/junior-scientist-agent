@@ -1,9 +1,13 @@
+import sys
 import json
 import textwrap
+from pathlib import Path
 from rich.console import Console
+from rich.panel import Panel
 
 from buddy.function import * 
-from buddy.utils import print_in_box, clean_json_string
+from buddy.utils import print_in_box, clean_json_string, update_config, get_config
+from buddy.dataclass import AdvisorReport
 
 def process_report(requirement: str, suggestions: dict):
     return textwrap.dedent(f"""
@@ -26,7 +30,7 @@ def process_report(requirement: str, suggestions: dict):
     """).strip()
 
 class AdviseAgent:
-    def __init__(self, model, console=None):
+    def __init__(self, model, console=None, reports_dir="analysis_reports"):
         """
         AdviseAgent: the agent to suggest which machine learning task/model/dataset to use based on the user's
         requirements. The return of the agent is an instruction to the user to modify the code based on the logs and
@@ -39,9 +43,13 @@ class AdviseAgent:
         self.model = model
         self.chat_history = []
         self.console = console
+
         if not self.console:
             self.console = Console()
         
+        self.report_dir = Path(reports_dir)
+        self.report_dir.mkdir(exist_ok=True)
+
         # prompts
         self.sys_prompt = """
         You are an Machine learning expert tasked with advising on the best ML task/model/algorithm to use. . Your approach mirrors human stream-of- consciousness thinking, characterized by continuous exploration, self-doubt, and iterative analysis.
@@ -90,9 +98,7 @@ class AdviseAgent:
             "reference": ["xxxx", "xxxx"],
             "evaluation_metric": ["xxx", "xxx"],
             "training_method": "xxxx",
-            "serving_method": "Serving is not required",
             "device": "xxxx",
-            "data_summary": "The data provided is a..., it contains...",
             "suggestion": "Based on the user requirement, we suggest you to..."
         }
         """
@@ -102,6 +108,7 @@ class AdviseAgent:
             schema_preview_csv_data,
         ]
         self.report = None
+        self.json_report = None
         self.sys_prompt += self.json_mode_prompt  # add the json mode prompt
         self.chat_history.append({"role": "system", "content": self.sys_prompt})
 
@@ -161,6 +168,28 @@ class AdviseAgent:
         print_in_box("Which datasets would you like?", title="Data Buddy", color="green")
         return questionary.select("Type your answer here:", choices=suggestions['datasets']).ask()
 
+    def _get_report_path(self, dataset_hash: str) -> Path:
+        """Get path for report file"""
+        return self.report_dir / f"advisory_{dataset_hash}.json"
+    
+    def save_report(self):
+        """
+        Save the report to the chat history.
+
+        Args:
+            report: the report to save.
+        """
+        config = get_config()
+        if not config:
+            self.console.print(Panel("No analysis report found. Please run the analysis agent first.", title="Planner Agent"))
+            sys.exit(0)
+        dataset_hash = config.get("dataset_hash")
+        report_path = self._get_report_path(dataset_hash)
+
+        with open(report_path, "w") as file:
+            json.dump(self.json_report, file, indent=4)
+
+
     def suggest(self, requirements: str):
         """
         Suggest the machine learning task/model/algorithm to use based on the user's requirements.
@@ -196,15 +225,12 @@ class AdviseAgent:
         print_in_box(self.report, title="Data Buddy", color="green")
 
         while True:
-            question = questionary.text(
-                "Suggestions to improve the report? (ENTER to move to the next stage, \"exit\" to exit the project)"
-            ).ask()
+            keep_moving = questionary.select("Do you want to continue?", choices=["Yes", "No"]).ask()
+            if keep_moving.lower() == "no":
+                break
 
-            if not question:
-                break
-            elif question.lower() == "exit":
-                break
-            
+            question = questionary.text("Suggestions to improve the report?").ask()
+
             with self.console.status("Let me think what else we can do..."):
                 self.chat_history.append({"role": "user", "content": question})
                 text = self.model.query(
@@ -214,5 +240,8 @@ class AdviseAgent:
                     response_format={"type": "json_object"}
                 )
                 self.report = process_report(requirements, json.loads(text))
+                self.json_report = json.loads(text)
                 print_in_box(self.report, title="Data Buddy", color="green")
+                
+        self.save_report()
         return self.report

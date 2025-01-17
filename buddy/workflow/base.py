@@ -5,7 +5,7 @@ from rich.panel import Panel
 
 from buddy.model import load_model
 from buddy.utils import print_in_box, ask_text, dataframe_validator
-from buddy.agents import AdviseAgent, AnalyzerAgent
+from buddy.agents import AdviseAgent, AnalyzerAgent, PlannerAgent
 
 def ask_data(data_str: str):
     """
@@ -32,6 +32,7 @@ def base(work_dir: str, model=None):
     # defining the agents
     advisor = AdviseAgent(model, console)
     analyzer = AnalyzerAgent(model, console)
+    planner = PlannerAgent(model, console)
 
     dataset = ask_text("What is the dataset you are working with?")
     if not dataset:
@@ -53,3 +54,8 @@ def base(work_dir: str, model=None):
         return
     report = advisor.chat(requirements)
     print_in_box(report, title="Final Data Buddy results", color="green")
+    
+    get_plan = questionary.select("Do you want to generate a ML development plan?", choices=["Yes", "No"]).ask()
+    if get_plan == "Yes":
+        ml_plan = planner.generate_plan()
+        print(ml_plan)
