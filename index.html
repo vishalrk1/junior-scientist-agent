@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Auth API Tester</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 20px auto;
+        padding: 20px;
+        background: #f5f5f5;
+      }
+      .container {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .form-group {
+        margin-bottom: 15px;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+      input {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+      button {
+        background: #4caf50;
+        color: white;
+        padding: 10px 15px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #45a049;
+      }
+      #response {
+        margin-top: 20px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 4px;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+      .error {
+        color: #dc3545;
+        margin-top: 10px;
+      }
+      .success {
+        color: #28a745;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Auth API Tester</h1>
+
+      <!-- Regular Login Form -->
+      <div class="form-group">
+        <h2>Regular Login</h2>
+        <form id="loginForm">
+          <label for="email">Email:</label>
+          <input type="email" id="email" required />
+
+          <label for="password">Password:</label>
+          <input type="password" id="password" required />
+
+          <button type="submit">Login</button>
+        </form>
+      </div>
+
+      <!-- Response Display -->
+      <div class="form-group">
+        <h3>Response</h3>
+        <div id="response">No response yet</div>
+      </div>
+
+      <!-- Stored Tokens -->
+      <div class="form-group">
+        <h3>Stored Tokens</h3>
+        <div id="storedTokens">No tokens stored</div>
+      </div>
+    </div>
+
+    <script>
+      const API_BASE_URL = "http://127.0.0.1:8000";
+
+      // Function to update the response display
+      function updateResponse(data, isError = false) {
+        const responseElem = document.getElementById("response");
+        responseElem.className = isError ? "error" : "success";
+        responseElem.textContent =
+          typeof data === "object" ? JSON.stringify(data, null, 2) : data;
+      }
+
+      // Function to update stored tokens display
+      function updateStoredTokens() {
+        const storedTokens = document.getElementById("storedTokens");
+        const token = localStorage.getItem("authToken");
+        if (token) {
+          storedTokens.innerHTML = `
+                    <strong>Access Token:</strong><br>
+                    <div style="word-break: break-all;">${token}</div>
+                    <button onclick="clearTokens()" style="margin-top: 10px;">Clear Tokens</button>
+                `;
+        } else {
+          storedTokens.textContent = "No tokens stored";
+        }
+      }
+
+      // Function to clear stored tokens
+      function clearTokens() {
+        localStorage.removeItem("authToken");
+        updateStoredTokens();
+      }
+
+      // Regular Login Form Handler
+      document
+        .getElementById("loginForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+
+          const formData = new URLSearchParams();
+          formData.append("username", document.getElementById("email").value);
+          formData.append(
+            "password",
+            document.getElementById("password").value
+          );
+
+          try {
+            const response = await fetch(`${API_BASE_URL}/auth/login`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+              },
+              body: formData,
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+              throw new Error(data.detail || "Login failed");
+            }
+
+            // Store the token
+            if (data.access_token) {
+              localStorage.setItem("authToken", data.access_token);
+            }
+
+            updateResponse(data);
+            updateStoredTokens();
+          } catch (error) {
+            updateResponse(error.message, true);
+          }
+        });
+
+      // Initialize stored tokens display
+      updateStoredTokens();
+    </script>
+  </body>
+</html>

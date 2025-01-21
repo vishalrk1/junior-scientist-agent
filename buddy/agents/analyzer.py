@@ -52,7 +52,6 @@ class AnalyzerAgent:
             3. Outlier detection and handling strategies
             4. Necessary transformations and their impact
             5. Data validation requirements
-            
             Walk me through your complete analysis of these aspects.
             </contemplator>
             """,
@@ -65,7 +64,6 @@ class AnalyzerAgent:
             3. Potential risks and mitigation strategies
             4. Actionable recommendations for business growth
             5. Critical metrics for ongoing monitoring
-            
             Provide detailed insights with supporting evidence.
             </contemplator>
             """,
@@ -75,7 +73,6 @@ class AnalyzerAgent:
         """Creates detailed system prompt with focus on selected columns if specified"""
         analysis_cols = selected_columns if selected_columns else df.columns
         
-        # Generate detailed statistics for selected columns
         stats = {
             col: {
                 "type": str(df[col].dtype),
@@ -144,7 +141,6 @@ class AnalyzerAgent:
     def generate_dataset_hash(self, df: pd.DataFrame) -> str:
         """Generate a unique hash for the dataset"""
         data_hash = hashlib.md5()
-        # Include column names, data types, and basic stats in hash
         data_hash.update(str(df.columns.tolist()).encode())
         data_hash.update(str(df.dtypes.tolist()).encode())
         data_hash.update(str(df.describe().to_dict()).encode())
@@ -159,7 +155,6 @@ class AnalyzerAgent:
             title="Report Information"
         ))
 
-        # Display metadata
         metadata_table = Table(title="Dataset Metadata")
         metadata_table.add_column("Property", style="cyan")
         metadata_table.add_column("Value", style="yellow")
@@ -170,7 +165,6 @@ class AnalyzerAgent:
         self.console.print(metadata_table)
         self.console.print("\n")
 
-        # Display analysis results
         for result in report.results:
             content = f"# {result.category.title()}\n\n{result.steps}\n"
             
@@ -189,7 +183,6 @@ class AnalyzerAgent:
         Args:
             df: The dataframe to analyze
         """
-        # Generate a unique hash for the dataset
         data_hash = self.generate_dataset_hash(df)
         existing_report = self.load_report(data_hash)
 
@@ -207,14 +200,11 @@ class AnalyzerAgent:
                     {"role": "system", "content": system_prompts},
                     {"role": "user", "content": self.prompts[analysis_type]}
                 ]
-
-                # Get model response for the analysis type
                 insights = self.model.query(chat_history)
                 results.append(AnalysisResult(analysis_type, insights))
 
                 self.console.print(f"[green]✓[/green] Completed {analysis_type} analysis")
 
-        # Create an analysis report
         report = AnalysisReport(
             dataset_hash=data_hash,
             timestamp=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),

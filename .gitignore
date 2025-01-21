@@ -3,3 +3,5 @@ projects/
 databuddy.egg-info/
 buddy.egg-info/
 **/__pycache__/
+
+backend/config.py
