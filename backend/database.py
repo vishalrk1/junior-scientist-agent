@@ -10,6 +10,7 @@ class Database:
     client: Optional[AsyncIOMotorClient] = None
     db = None
     users_collection = None
+    projects_collection = None
     
     @classmethod
     async def connect_db(cls):
@@ -20,6 +21,7 @@ class Database:
             
             cls.db = cls.client[settings.DATABASE_NAME]
             cls.users_collection = cls.db.users
+            cls.projects_collection = cls.db.projects
             
             await cls.users_collection.create_index("email", unique=True)
             logger.info("Database indexes ensured.")
@@ -48,3 +50,9 @@ class Database:
         if cls.users_collection is None:
             raise Exception("Database not initialized. Make sure to call connect_db first.")
         return cls.users_collection
+    
+    @classmethod 
+    def get_projects_collection(cls):
+        if cls.projects_collection is None:
+            raise Exception("Database not initialized. Make sure to call connect_db first.")
+        return cls.projects_collection
