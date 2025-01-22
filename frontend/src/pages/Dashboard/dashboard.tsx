@@ -1,68 +1,66 @@
-import React from 'react'
-import { Plus } from 'lucide-react'
-import { 
-  Sidebar, 
-  SidebarContent, 
-  SidebarHeader, 
-  SidebarProvider, 
+import { AppSidebar } from "@/components/sidebar/app-sidebar";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+} from "@/components/ui/breadcrumb";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import {
+  SidebarInset,
+  SidebarProvider,
   SidebarTrigger,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton
-} from '@/components/ui/sidebar'
-import { Button } from '@/components/ui/button'
-import ChatSection from '@/components/chat/chat-section'
-import { CreateProjectDialog } from '@/components/project/create-project-dialog'
+} from "@/components/ui/sidebar";
+import { ThemeProvider } from "@/contexts/theme-provider";
+import { Settings, Star } from "lucide-react";
+
+import React from "react";
 
 const Dashboard = () => {
-  const [showProjectModal, setShowProjectModal] = React.useState(false)
-
   return (
-    <SidebarProvider defaultOpen={true}>
-      <div className="flex h-screen bg-zinc-900">
-        <Sidebar className="border-r border-border/50">
-          <SidebarHeader className="border-b border-border/50">
-            <div className="flex items-center justify-between px-2">
-              <h2 className="text-lg font-semibold">Projects</h2>
-              <SidebarTrigger />
+    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
+      <SidebarProvider
+        style={
+          {
+            "--sidebar-width": "350px",
+          } as React.CSSProperties
+        }
+      >
+        <AppSidebar />
+        <SidebarInset>
+          <header className="sticky top-0 flex shrink-0 items-center gap-2 border-b bg-background p-4">
+            <SidebarTrigger className="-ml-1" />
+            <Separator orientation="vertical" className="mr-2 h-4" />
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbPage className="line-clamp-1">
+                    Project Management & Task Tracking
+                  </BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+            <div className="ml-auto px-3">
+              <div className="flex items-center gap-2 text-sm">
+                <div className="hidden font-medium text-muted-foreground md:inline-block">
+                  Edit Oct 08
+                </div>
+                <Button variant="ghost" size="icon" className="h-7 w-7">
+                  <Star />
+                </Button>
+                <Separator orientation="vertical" className="mr-2 h-4" />
+                <Button variant="ghost" size="icon" className="h-7 w-7">
+                  <Settings />
+                </Button>
+              </div>
             </div>
-          </SidebarHeader>
-          <SidebarContent>
-            <div className="p-2">
-              <Button 
-                className="w-full justify-start gap-2" 
-                onClick={() => setShowProjectModal(true)}
-              >
-                <Plus className="h-4 w-4" />
-                Create Project
-              </Button>
-            </div>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton>Project 1</SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton>Project 2</SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarContent>
-        </Sidebar>
+          </header>
+          <div className="flex flex-1 flex-col gap-4 p-4"></div>
+        </SidebarInset>
+      </SidebarProvider>
+    </ThemeProvider>
+  );
+};
 
-        <div className="flex-1 relative">
-          {/* Mobile sidebar trigger */}
-          <div className="absolute left-4 top-4 md:hidden z-50">
-            <SidebarTrigger />
-          </div>
-          <ChatSection />
-        </div>
-
-        <CreateProjectDialog 
-          open={showProjectModal} 
-          onOpenChange={setShowProjectModal} 
-        />
-      </div>
-    </SidebarProvider>
-  )
-}
-
-export default Dashboard
+export default Dashboard;

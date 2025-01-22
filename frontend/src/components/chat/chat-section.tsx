@@ -5,18 +5,15 @@ import { Textarea } from '@/components/ui/textarea'
 
 const ChatSection = () => {
   return (
-    <div className="flex h-full flex-col bg-background dark:bg-zinc-900">
+    <div className="flex h-full flex-col bg-zinc-900 w-full">
       {/* Navbar */}
-      <div className="border-b border-border/50 p-4 dark:bg-zinc-800/50">
-        <h1 className="text-xl font-semibold dark:text-white pl-12 md:pl-0">Chat</h1>
+      <div className="border-b border-border/10 p-4 dark:bg-zinc-800/50">
+        <h1 className="text-xl font-semibold text-zinc-200 pl-12 md:pl-0">Project 1</h1>
       </div>
-
-      {/* Chat Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 dark:bg-zinc-900">
         {/* Messages will go here */}
       </div>
 
-      {/* Input Area */}
       <div className="border-t border-border/50 p-4 dark:bg-zinc-800/50">
         <form 
           className="flex gap-2 max-w-5xl mx-auto"

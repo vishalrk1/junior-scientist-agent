@@ -1,5 +1,3 @@
-import './App.css'
-
 import { ThemeProvider } from './contexts/theme-provider'
 import Dashboard from './pages/Dashboard/dashboard'
 
