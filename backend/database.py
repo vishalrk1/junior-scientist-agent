@@ -1,6 +1,7 @@
 import logging
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo.errors import ConnectionFailure, OperationFailure
+from pymongo import IndexModel, ASCENDING, DESCENDING
 from config import settings
 from typing import Optional
 import backoff
@@ -34,25 +35,44 @@ class Database:
             cls.projects_collection = cls.db.projects
             cls.agents_collection = cls.db.agents
             
-            await cls.users_collection.create_indexes([
-                [("email", 1)],
-                [("created_at", -1)]
-            ])
-            await cls.projects_collection.create_indexes([
-                [("user_id", 1)],
-                [("created_at", -1)],
-                [("status", 1)],
-                [("last_activity", -1)],
-                [("model_provider", 1)]
-            ])
-            await cls.agents_collection.create_indexes([
-                [("project_id", 1)],
-                [("type", 1)],
-                [("status", 1)],
-                [("project_id", 1), ("type", 1)],
-                [("project_id", 1), ("is_default", 1)]
-            ])
-            logger.info("Database indexes ensured.")
+            # Create indexes with try-except blocks
+            try:
+                await cls.users_collection.create_indexes([
+                    IndexModel([("email", ASCENDING)], unique=True),
+                    IndexModel([("created_at", DESCENDING)])
+                ])
+            except OperationFailure as e:
+                if not "already exists" in str(e):
+                    raise
+                logger.info("Users collection indexes already exist")
+
+            try:
+                await cls.projects_collection.create_indexes([
+                    IndexModel([("user_id", ASCENDING)]),
+                    IndexModel([("created_at", DESCENDING)]),
+                    IndexModel([("status", ASCENDING)]),
+                    IndexModel([("last_activity", DESCENDING)]),
+                    IndexModel([("model_provider", ASCENDING)])
+                ])
+            except OperationFailure as e:
+                if not "already exists" in str(e):
+                    raise
+                logger.info("Projects collection indexes already exist")
+
+            try:
+                await cls.agents_collection.create_indexes([
+                    IndexModel([("project_id", ASCENDING)]),
+                    IndexModel([("type", ASCENDING)]),
+                    IndexModel([("status", ASCENDING)]),
+                    IndexModel([("project_id", ASCENDING), ("type", ASCENDING)]),
+                    IndexModel([("project_id", ASCENDING), ("is_default", ASCENDING)])
+                ])
+            except OperationFailure as e:
+                if not "already exists" in str(e):
+                    raise
+                logger.info("Agents collection indexes already exist")
+
+            logger.info("Database indexes checked/created.")
             
         except Exception as e:
             logger.error(f"Failed to connect to MongoDB: {str(e)}")

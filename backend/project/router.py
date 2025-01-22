@@ -16,11 +16,29 @@ from models.agent import Agent, AgentType, ParameterSchema
 from auth.dependencies import get_current_user
 from database import Database
 from bson import ObjectId
-from cryptography.fernet import Fernet
 from config import settings
+import base64
+
+from models.project import ProjectAgentConfig
+from models.agent import AgentStatus
+
+DEFAULT_AGENT_CONFIGS = {
+    AgentType.analyzer: {
+        "parameters": {"temperature": 0.6, "max_tokens": 2000},
+    },
+    AgentType.advisor: {
+        "parameters": {"temperature": 0.6, "max_tokens": 1500},
+    },
+    AgentType.planner: {
+        "parameters": {"temperature": 0.6, "max_tokens": 1000},
+    },
+    AgentType.coder: {
+        "parameters": {"temperature": 0.6, "max_tokens": 2500},
+        "additional_prompt": "Generate and explain code"
+    }
+}
 
 router = APIRouter()
-fernet = Fernet(settings.ENCRYPTION_KEY.encode())
 
 @router.post("", response_model=ProjectResponse)
 async def create_project(project: Project, current_user: dict = Depends(get_current_user)):
@@ -29,14 +47,40 @@ async def create_project(project: Project, current_user: dict = Depends(get_curr
     
     async with await Database.client.start_session() as session:
         async with session.start_transaction():
-            project_data = project.model_dump()
-            project_data["user_id"] = str(current_user["_id"])
-            project_data["created_at"] = datetime.utcnow()
-            project_data["last_activity"] = datetime.utcnow()
+            now = datetime.utcnow()
+            
+            # Create agent configs first
+            default_agent_configs = []
+            for agent_type, config in DEFAULT_AGENT_CONFIGS.items():
+                agent_config = ProjectAgentConfig(
+                    agent_type=agent_type,
+                    parameters=ParameterSchema(**config["parameters"]),
+                    additional_prompt=config.get("additional_prompt")
+                )
+                default_agent_configs.append(agent_config)
 
-            encrypted_key = fernet.encrypt(project_data["api_key"].get_secret_value().encode())
-            project_data["api_key"] = encrypted_key.decode()
+            project_data = {
+                "name": project.name,
+                "description": project.description,
+                "model_provider": project.model_provider,
+                "api_key": base64.b64encode(project.api_key.encode()).decode(),
+                "user_id": str(current_user["_id"]),
+                "created_at": now,
+                "updated_at": now,
+                "last_activity": now,
+                "status": ProjectStatus.active,
+                "conversation_ids": [],
+                "report_ids": [],
+                "current_conversation_id": None,
+                "settings": {
+                    "context_size": 10,
+                    "max_reports_per_agent": 5,
+                    "auto_save_interval": 300
+                },
+                "default_agent_configs": [config.model_dump() for config in default_agent_configs]
+            }
 
+            # Insert project
             result = await Database.execute_with_retry(
                 projects_collection,
                 'insert_one',
@@ -45,31 +89,26 @@ async def create_project(project: Project, current_user: dict = Depends(get_curr
             )
             
             project_id = str(result.inserted_id)
-
-            # Create default agents for the project
-            default_agents = []
-            for agent_type in AgentType:
-                agent_config = next(
-                    (config for config in project.default_agent_configs 
-                     if config.agent_type == agent_type), 
-                    None
-                )
-                
+            
+            # Create agent instances
+            agents_to_create = []
+            for agent_type, config in DEFAULT_AGENT_CONFIGS.items():
                 agent_data = {
                     "project_id": project_id,
                     "type": agent_type,
                     "version": "1.0.0",
-                    "parameters": agent_config.parameters.model_dump() if agent_config else ParameterSchema().model_dump(),
-                    "additional_prompt": agent_config.additional_prompt if agent_config else None,
-                    "is_default": True
+                    "parameters": config["parameters"],
+                    "additional_prompt": config.get("additional_prompt"),
+                    "is_default": True,
+                    "status": AgentStatus.active
                 }
-                default_agents.append(Agent(**agent_data))
+                agents_to_create.append(agent_data)
 
-            if default_agents:
+            if agents_to_create:
                 await Database.execute_with_retry(
                     agents_collection,
                     'insert_many',
-                    [agent.dict() for agent in default_agents],
+                    agents_to_create,
                     session=session
                 )
 
@@ -82,8 +121,6 @@ async def list_projects(
     status: Optional[ProjectStatus] = None
 ):
     projects_collection = Database.get_projects_collection()
-    
-    # Build query
     query = {"user_id": str(current_user["_id"])}
     if status:
         query["status"] = status

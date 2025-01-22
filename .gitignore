@@ -5,3 +5,5 @@ buddy.egg-info/
 **/__pycache__/
 
 backend/config.py
+encryption.py
+encryption_key.key

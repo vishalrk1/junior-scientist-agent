@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import Database
 from auth.router import router as auth_router
 from project.router import router as project_router
-from agents.router import router as agents_router
+from agent.router import router as agents_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

@@ -25,3 +25,4 @@ lancedb~=0.15.0
 tantivy~=0.22.0
 pymongo
 motor
+bcrypt==4.0.1

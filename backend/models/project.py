@@ -27,28 +27,22 @@ class ProjectAgentConfig(BaseModel):
     additional_prompt: Optional[str] = None
 
 class Project(MongoModel):
-    user_id: str = Field(title="User ID")
     name: str = Field(title="Project Name")
-    description: Optional[str] = Field(title="Project Description")
+    description: Optional[str] = Field(title="Project Description", default=None)
     model_provider: ModelProviders = Field(title="Model Provider")
-    api_key: SecretStr = Field(title="API Key")
-    dataset: Optional[DatasetSchema] = Field(title="Dataset Information")
-    status: ProjectStatus = Field(default=ProjectStatus.active, title="Project Status")
-    last_activity: datetime = Field(default_factory=datetime.utcnow)
-    default_agent_configs: List[ProjectAgentConfig] = Field(
-        default_factory=list,
-        title="Default Agent Configurations"
-    )
-    conversation_ids: List[str] = Field(default_factory=list, title="Associated Conversations")
-    report_ids: List[str] = Field(default_factory=list, title="Generated Reports")
-    current_conversation_id: Optional[str] = Field(title="Current Active Conversation")
+    api_key: str = Field(title="API Key")  # Changed from SecretStr to str
+    status: ProjectStatus = Field(default=ProjectStatus.active)
+    dataset: Optional[DatasetSchema] = None
     settings: Dict[str, Any] = Field(
         default_factory=lambda: {
             "context_size": 10,
             "max_reports_per_agent": 5,
-            "auto_save_interval": 300  # 5 minutes
+            "auto_save_interval": 300
         }
     )
+    conversation_ids: List[str] = Field(default_factory=list)
+    report_ids: List[str] = Field(default_factory=list)
+    current_conversation_id: Optional[str] = None
 
     @property
     def collection_name(self) -> str:
@@ -60,16 +54,7 @@ class Project(MongoModel):
                 "name": "Science Project 1",
                 "description": "My first science project",
                 "model_provider": "openai",
-                "status": "active",
-                "default_agent_configs": [
-                    {
-                        "agent_type": "analyzer",
-                        "parameters": {
-                            "temperature": 0.7,
-                            "max_tokens": 2000
-                        }
-                    }
-                ]
+                "api_key": "your-api-key-here"
             }
         }
 
@@ -77,18 +62,33 @@ class ProjectResponse(BaseModel):
     id: str
     user_id: str
     name: str
-    description: Optional[str]
+    description: Optional[str] = None
     model_provider: ModelProviders
-    dataset: Optional[DatasetSchema]
-    status: ProjectStatus
+    dataset: Optional[DatasetSchema] = None
+    status: ProjectStatus = ProjectStatus.active
     created_at: datetime
-    updated_at: Optional[datetime]
+    updated_at: Optional[datetime] = None
     last_activity: datetime
-    default_agent_configs: List[ProjectAgentConfig]
-    conversation_ids: List[str]
-    report_ids: List[str]
-    current_conversation_id: Optional[str]
-    settings: Dict[str, Any]
+    default_agent_configs: List[ProjectAgentConfig] = Field(default_factory=list)
+    conversation_ids: List[str] = Field(default_factory=list)
+    report_ids: List[str] = Field(default_factory=list)
+    current_conversation_id: Optional[str] = None
+    settings: Dict[str, Any] = Field(
+        default_factory=lambda: {
+            "context_size": 10,
+            "max_reports_per_agent": 5,
+            "auto_save_interval": 300
+        }
+    )
+
+    @classmethod
+    def from_db(cls, db_data: dict) -> "ProjectResponse":
+        if "default_agent_configs" in db_data:
+            db_data["default_agent_configs"] = [
+                ProjectAgentConfig(**config) if isinstance(config, dict) else config 
+                for config in db_data["default_agent_configs"]
+            ]
+        return cls(**db_data)
 
     class Config:
         json_encoders = {
