@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import useAuthStore from './useAuthStore';
-import { dummyUsers } from '@/lib/dummyData';
-import { User } from '@/lib/types';
+import { authApi } from '@/lib/api';
+import { Tokens } from '@/lib/types';
 
 interface LoginCredentials {
   email: string;
@@ -21,29 +21,27 @@ export const useAuth = () => {
     try {
       setLoading(true);
       setError(null);
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Find user in dummy data
-      const user = dummyUsers.find(u => u.email === credentials.email);
+      const tokenResponse = await authApi.login(credentials.email, credentials.password);
       
-      if (!user) {
-        throw new Error('Invalid credentials');
-      }
-
-      // For demo purposes, accept any password
-      const dummyTokens = {
-        access_token: 'dummy_access_token',
-        refresh_token: 'dummy_refresh_token'
+      const tokens: Tokens = {
+        access_token: tokenResponse.access_token,
+        expires_in: tokenResponse.expires_in
       };
 
-      setTokens(dummyTokens);
-      setUser(user);
-      return { user, tokens: dummyTokens };
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
-      throw err;
+      setTokens(tokens);
+      
+      // Add small delay to ensure token is set in axios interceptor
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const userResponse = await authApi.getCurrentUser();
+      setUser(userResponse);
+      
+      return { user: userResponse, tokens };
+    } catch (err: any) {
+      const message = err.response?.data?.detail || 'Login failed';
+      setError(message);
+      throw new Error(message);
     } finally {
       setLoading(false);
     }
@@ -53,36 +51,19 @@ export const useAuth = () => {
     try {
       setLoading(true);
       setError(null);
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      if (dummyUsers.some(u => u.email === data.email)) {
-        throw new Error('Email already registered');
-      }
-
-      const newUser: User = {
-        id: `usr_${Math.random().toString(36).substr(2, 9)}`,
-        name: data.name,
-        email: data.email,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        last_login: new Date().toISOString(),
-      };
-
-      // In a real app, you would save this to the backend
-      dummyUsers.push(newUser);
-      return newUser;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed');
-      throw err;
+      const user = await authApi.register(data.name, data.email, data.password);
+      return user;
+    } catch (err: any) {
+      const message = err.response?.data?.detail || 'Registration failed';
+      setError(message);
+      throw new Error(message);
     } finally {
       setLoading(false);
     }
   };
 
   const logout = async () => {
-    // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 500));
     storeLogout();
   };

@@ -93,11 +93,12 @@ async def google_login(request: GoogleAuthRequest):
     
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_profile(current_user: dict = Depends(get_current_user)):
+    print(">>> USER: ", str(current_user["_id"]))
     return UserResponse(
         id=str(current_user["_id"]),
         email=current_user["email"],
         name=current_user.get("name"),
-        created_at=current_user["created_at"]
+        created_at=current_user["created_at"],
     )
 
 @router.post("/logout")

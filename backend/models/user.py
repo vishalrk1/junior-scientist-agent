@@ -20,8 +20,6 @@ class UserResponse(BaseModel):
     name: Optional[str]
     email: EmailStr
     created_at: datetime
-    updated_at: Optional[datetime]
-    last_login: Optional[datetime]
 
 class UserInDB(User):
     hashed_password: str = Field(title="Hashed Password")

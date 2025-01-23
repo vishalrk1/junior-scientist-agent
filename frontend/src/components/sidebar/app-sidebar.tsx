@@ -21,6 +21,8 @@ import useProjects from "@/hooks/useProjects";
 import { formatDate } from "@/utils/formater";
 import useAuthStore from "@/hooks/useAuthStore";
 import { LoginCard } from "../cards/login-card";
+import { Button } from "../ui/button";
+import AddProjectButton from "../button/addProject";
 
 const data = {
   user: {
@@ -168,14 +170,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarContent className="flex flex-col flex-grow">
           <SidebarMenu className="px-0">
             <SidebarMenuItem className="mt-3 mx-2">
-              <SidebarMenuButton
-                type="button"
-                className="flex items-center justify-center"
-                variant="outline"
-              >
-                <Plus />
-                <span className="text-sm">Add New Project</span>
-              </SidebarMenuButton>
+              <AddProjectButton className="w-full"/>
             </SidebarMenuItem>
           </SidebarMenu>
 
