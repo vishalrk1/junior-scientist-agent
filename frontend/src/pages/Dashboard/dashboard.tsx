@@ -12,54 +12,88 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { ThemeProvider } from "@/contexts/theme-provider";
-import { Settings, Star } from "lucide-react";
+import { Folder, Globe, Settings, Settings2, Star } from "lucide-react";
+import useProjects from "@/hooks/useProjects";
 
 import React from "react";
+import { formatDate } from "@/utils/formater";
+import ChatInput from "@/components/textbox/chatInput";
+import {
+  TooltipProvider,
+} from "@/components/ui/tooltip";
+import { TooltipIconButton } from "@/components/ui/tooltip-icon-button";
+
+const CHAT_ACTIONS = [
+  { icon: Folder, tooltip: "Upload Files" },
+  { icon: Globe, tooltip: "Web Browsing" },
+  { icon: Settings2, tooltip: "Context settings" },
+];
+
+const HeaderActions = ({ activeProject }: { activeProject: any }) => (
+  <div className="ml-auto px-3">
+    <div className="flex items-center gap-2 text-sm">
+      <div className="hidden font-medium text-muted-foreground md:inline-block">
+        {activeProject &&
+          (activeProject?.updated_at
+            ? `Edit ${formatDate(activeProject.updated_at)}`
+            : `Created ${formatDate(activeProject.created_at)}`)}
+      </div>
+      <Button variant="ghost" size="icon" className="h-7 w-7">
+        <Star />
+      </Button>
+      <Separator orientation="vertical" className="mr-2 h-4" />
+      <Button variant="ghost" size="icon" className="h-7 w-7">
+        <Settings />
+      </Button>
+    </div>
+  </div>
+);
 
 const Dashboard = () => {
+  const { activeProjectId, getActiveProject } = useProjects();
+  const activeProject = getActiveProject();
+
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-      <SidebarProvider
-        style={
-          {
-            "--sidebar-width": "350px",
-          } as React.CSSProperties
-        }
-      >
-        <AppSidebar />
-        <SidebarInset>
-          <header className="sticky top-0 flex shrink-0 items-center gap-2 border-b bg-background p-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 h-4" />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbPage className="line-clamp-1">
-                    Project Management & Task Tracking
-                  </BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-            <div className="ml-auto px-3">
-              <div className="flex items-center gap-2 text-sm">
-                <div className="hidden font-medium text-muted-foreground md:inline-block">
-                  Edit Oct 08
-                </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7">
-                  <Star />
-                </Button>
-                <Separator orientation="vertical" className="mr-2 h-4" />
-                <Button variant="ghost" size="icon" className="h-7 w-7">
-                  <Settings />
-                </Button>
-              </div>
-            </div>
-          </header>
-          <div className="flex flex-1 flex-col gap-4 p-4"></div>
-        </SidebarInset>
-      </SidebarProvider>
-    </ThemeProvider>
+    <SidebarProvider
+      style={
+        {
+          "--sidebar-width": "350px",
+        } as React.CSSProperties
+      }
+    >
+      <AppSidebar />
+      <SidebarInset>
+        <header className="sticky top-0 flex shrink-0 items-center gap-2 border-b bg-background p-4">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-2 h-4" />
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbPage className="line-clamp-1 text-lg font-semibold">
+                  {activeProject?.name}
+                </BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+          <HeaderActions activeProject={activeProject} />
+        </header>
+        <div className="flex flex-1 flex-col gap-4 p-4"></div>
+        <div className="flex flex-col gap-1 border-t border-border p-4">
+          <div className="flex items-center justify-start bg-background mx-2 gap-1">
+            <TooltipProvider delayDuration={200}>
+              {CHAT_ACTIONS.map((action, index) => (
+                <TooltipIconButton
+                  key={index}
+                  icon={action.icon}
+                  tooltip={action.tooltip}
+                />
+              ))}
+            </TooltipProvider>
+          </div>
+          <ChatInput />
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 };
 

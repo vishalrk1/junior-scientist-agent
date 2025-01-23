@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Command, File, Inbox, Plus } from "lucide-react";
+import { Command, File, Inbox, MessageCircle, Plus } from "lucide-react";
 
 import { Label } from "@/components/ui/label";
 import {
@@ -16,6 +16,12 @@ import {
 } from "@/components/ui/sidebar";
 import { Switch } from "@/components/ui/switch";
 import { NavUser } from "../navbar/nav-user";
+import { dummyProjects } from "@/lib/dummyData";
+
+import useProjects from "@/hooks/useProjects";
+import { formatDate } from "@/utils/formater";
+import useAuthStore from "@/hooks/useAuthStore";
+import { LoginCard } from "../cards/login-card";
 
 const data = {
   user: {
@@ -23,11 +29,12 @@ const data = {
     email: "m@example.com",
     avatar: "/avatars/shadcn.jpg",
   },
+
   navMain: [
     {
       title: "Chats",
       url: "#",
-      icon: Inbox,
+      icon: MessageCircle,
       isActive: true,
     },
     {
@@ -37,6 +44,7 @@ const data = {
       isActive: false,
     },
   ],
+
   mails: [
     {
       name: "William Smith",
@@ -61,6 +69,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [activeItem, setActiveItem] = React.useState(data.navMain[0]);
   const [mails, setMails] = React.useState(data.mails);
   const { setOpen } = useSidebar();
+  const { projects, activeProjectId, setActiveProject } = useProjects();
+  const { isAuthenticated, user } = useAuthStore();
+
+  React.useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash;
+      if (hash.startsWith("#proj_")) {
+        setActiveProject(hash.replace("#proj_", ""));
+      } else {
+        setActiveProject(null);
+      }
+    };
+
+    handleHashChange();
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, [setActiveProject]);
+
+  console.log(activeProjectId);
 
   return (
     <Sidebar
@@ -81,8 +108,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <Command className="size-4" />
                   </div>
                   <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold">Acme Inc</span>
-                    <span className="truncate text-xs">Enterprise</span>
+                    <span className="truncate font-semibold">Data Buddy</span>
                   </div>
                 </a>
               </SidebarMenuButton>
@@ -100,17 +126,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         children: item.title,
                         hidden: false,
                       }}
-                      onClick={() => {
-                        setActiveItem(item);
-                        const mail = data.mails.sort(() => Math.random() - 0.5);
-                        setMails(
-                          mail.slice(
-                            0,
-                            Math.max(5, Math.floor(Math.random() * 10) + 1)
-                          )
-                        );
-                        setOpen(true);
-                      }}
+                      // onClick={() => {
+                      //   setActiveItem(item);
+                      //   const mail = data.mails.sort(() => Math.random() - 0.5);
+                      //   setMails(
+                      //     mail.slice(
+                      //       0,
+                      //       Math.max(5, Math.floor(Math.random() * 10) + 1)
+                      //     )
+                      //   );
+                      //   setOpen(true);
+                      // }}
                       isActive={activeItem.title === item.title}
                       className="px-2.5 md:px-2"
                     >
@@ -124,12 +150,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter>
-          <NavUser user={data.user} />
+          {isAuthenticated && user && <NavUser user={user} />}
         </SidebarFooter>
       </Sidebar>
 
-      {/* This is the second sidebar */}
-      {/* We disable collapsible and let it fill remaining space */}
       <Sidebar collapsible="none" className="hidden flex-1 md:flex">
         <SidebarHeader className="gap-3.5 border-b p-4">
           <div className="flex w-full items-center justify-between">
@@ -142,7 +166,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </Label>
           </div>
         </SidebarHeader>
-        <SidebarContent>
+        <SidebarContent className="flex flex-col flex-grow">
           <SidebarMenu className="px-0">
             <SidebarMenuItem className="mt-3 mx-2">
               <SidebarMenuButton
@@ -155,26 +179,38 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
-          <SidebarGroup className="px-0">
-            <SidebarGroupContent>
-              {mails.map((mail) => (
-                <a
-                  href="#"
-                  key={mail.email}
-                  className="flex flex-col items-start gap-2 whitespace-nowrap border-b p-4 text-sm leading-tight last:border-b-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                >
-                  <div className="flex w-full items-center gap-2">
-                    <span>{mail.name}</span>{" "}
-                    <span className="ml-auto text-xs">{mail.date}</span>
-                  </div>
-                  <span className="font-medium">{mail.subject}</span>
-                  <span className="line-clamp-2 w-[260px] whitespace-break-spaces text-xs">
-                    {mail.teaser}
-                  </span>
-                </a>
-              ))}
-            </SidebarGroupContent>
-          </SidebarGroup>
+
+          {isAuthenticated ? (
+            <SidebarGroup className="px-0 flex-grow">
+              <SidebarGroupContent>
+                {projects.map((project) => (
+                  <a
+                    href={`#proj_${project.id}`}
+                    key={project.id}
+                    className={`flex flex-col items-start gap-1 p-4 text-sm leading-tight hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:m-1 hover:rounded-md ${
+                      project.id === activeProjectId
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground m-1 rounded-md"
+                        : "border-b last:border-b-0"
+                    }`}
+                  >
+                    <div className="flex w-full items-center gap-2">
+                      <span className="font-semibold">{project.name}</span>{" "}
+                      <span className="ml-auto text-xs">
+                        {formatDate(project.created_at)}
+                      </span>
+                    </div>
+                    <span className="line-clamp-2 w-full whitespace-break-spaces text-xs">
+                      {project?.description}
+                    </span>
+                  </a>
+                ))}
+              </SidebarGroupContent>
+            </SidebarGroup>
+          ) : (
+            <div className="flex-grow flex items-end p-4">
+              <LoginCard />
+            </div>
+          )}
         </SidebarContent>
       </Sidebar>
     </Sidebar>
