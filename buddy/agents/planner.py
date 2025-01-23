@@ -12,21 +12,16 @@ from pathlib import Path
 
 from buddy.utils import get_config
 from buddy.dataclass import AnalysisReport, MLTask, MLPlan, AdvisorReport
+from .base import BaseAgent
 
-class PlannerAgent:
-    def __init__(self, model, console=None, reports_dir="analysis_reports"):
-        """
-        An agent that creates ML development plans based on data analysis reports.
-        Takes the AnalyzerAgent's report as input and generates detailed development tasks.
-
-        Args:
-            model: The LLM model to use for planning
-            console: Rich console for display
-            reports_dir: Directory to store analysis reports
-        """
-        self.model = model
-        self.console = console if console else Console()
-        self.report_dir = Path(reports_dir)
+class PlannerAgent(BaseAgent):
+    def __init__(self, model, console: Optional[Console] = None, config: Optional[Dict[str, Any]] = None):
+        super().__init__(model, console, config)
+        self.sys_prompt = self._prepare_prompt("""
+        You are an ML project planning expert who creates detailed development plans.
+        Break down complex ML projects into manageable steps and milestones.
+        """)
+        self.report_dir = Path("analysis_reports")
         self.report_dir.mkdir(exist_ok=True)
 
         self.analysis_report: AnalysisReport = self._load_analysis_report()
@@ -186,7 +181,7 @@ class PlannerAgent:
     def generate_plan(self, model_or_algorithm=None) -> MLPlan:
         with self.console.status("[bold green]Generating ML development plan...") as status:
             chat_history = [
-                {"role": "system", "content": self._create_system_prompt(model_or_algorithm)},
+                {"role": "system", "content": self.sys_prompt},
                 {"role": "user", "content": self.create_planning_context(self.analysis_report)}
             ]
             

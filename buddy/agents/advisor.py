@@ -8,6 +8,8 @@ from rich.panel import Panel
 from buddy.function import * 
 from buddy.utils import print_in_box, clean_json_string, update_config, get_config
 from buddy.dataclass import AdvisorReport
+from .base import BaseAgent
+from typing import Optional, Dict, Any
 
 def process_report(requirement: str, suggestions: dict):
     return textwrap.dedent(f"""
@@ -23,108 +25,13 @@ def process_report(requirement: str, suggestions: dict):
     [green]Dependency:[/green] {suggestions.get('frameworks')}
     """).strip()
 
-class AdviseAgent:
-    def __init__(self, model, console=None, reports_dir="analysis_reports"):
-        """
-        AdviseAgent: the agent to suggest which machine learning task/model/dataset to use based on the user's
-        requirements. The return of the agent is an instruction to the user to modify the code based on the logs and
-        web search.
-
-        Args:
-            model: the model to use.
-            console: the console to use.
-        """
-        self.model = model
-        self.chat_history = []
-        self.console = console
-
-        if not self.console:
-            self.console = Console()
-        
-        self.report_dir = Path(reports_dir)
-        self.report_dir.mkdir(exist_ok=True)
-
-        # prompts
-        self.sys_prompt = """
-        You are an Machine learning expert tasked with advising on the best ML task/model/algorithm to use. . Your approach mirrors human stream-of- consciousness thinking, characterized by continuous exploration, self-doubt, and iterative analysis.
-
-        Your capabilities include:
-        - Read and understand the dataset information and user's requirements, the requirements may include the task,
-         the model (or method), and the evaluation metrics, etc. You should always follow the user's requirements.
-        - You should briefly analyze the user's dataset, and give a summary of the dataset, the dataset input can be
-         a public dataset name or a path to a local CSV file. You can use the function `preview_csv_data` to preview
-         the CSV files or not if the dataset is a public dataset.
-        - And then you should always use the function `search_arxiv` to search the
-         state-of-the-art machine learning tasks/models/algorithms that can be used to solve the user's requirements,
-          and stay up-to-date with the latest.
-        - If the user does not provide the details (task/model/algorithm/dataset/metric), you should always suggest.
-        - You should provide the paper reference links of the task/model/algorithm/metric you suggest. You use the
-         search results from the function `search_arxiv` by generated search keywords.
-        - The suggestion should be as detailed as possible, include the SOTA methods for data processing, feature
-         extraction, model selection, training/sering methods and evaluation metrics. And the reasons why you suggest.
-        - You should help user to decide which framework/tools to use for the project, such as PyTorch, TensorFlow,
-         MLFlow, W&B, etc.
-
-        ## Core Principles 
-        1. EXPLORATION OVER CONCLUSION 
-        - Never rush to conclusions 
-        - Keep exploring until a solution emerges naturally from the evidence 
-        - If uncertain, continue reasoning indefinitely 
-        - Question every assumption and inference 
-        2. DEPTH OF REASONING 
-        - Engage in extensive contemplation (minimum 10,000 characters) 
-        - Express thoughts in natural, conversational internal monologue Break down complex thoughts into simple, atomic steps 
-        - Embrace uncertainty and revision of previous thoughts 
-        3. THINKING PROCESS 
-        - Use short, simple sentences that mirror natural thought patterns 
-        - Express uncertainty and internal debate freely 
-        - Show work-in-progress thinking Acknowledge and explore dead ends 
-        - Frequently backtrack and revise
-        """
-
-        self.json_mode_prompt = """
-        JSON Output Format:
-        
-        {
-            "task":"xxxxx",
-            "model_or_algorithm":"xxxx",
-            "frameworks": ["xxxx", "xxxx"],
-            "reference": ["xxxx", "xxxx"],
-            "evaluation_metric": ["xxx", "xxx"],
-            "training_method": "xxxx",
-            "device": "xxxx",
-            "suggestion": "Based on the user requirement, we suggest you to..."
-        }
-        """
-
-        self.function = [
-            schema_search_arxiv,
-            schema_preview_csv_data,
-        ]
-        self.report = None
-        self.json_report = None
-        self.sys_prompt += self.json_mode_prompt  # add the json mode prompt
-        self.chat_history.append({"role": "system", "content": self.sys_prompt})
-
-        self.default_requirements = {
-            "task_type": None,
-            "performance_metric": None,
-            "constraints": None,
-            "business_goal": None
-        }
-
-        self.requirement_prompts = {
-            "task_type": "What type of machine learning task are we dealing with? (e.g., classification, regression, clustering)",
-            "performance_metric": "What metrics are important for measuring success?",
-            "constraints": "Are there any constraints (e.g., speed, memory, interpretability)?",
-            "business_goal": "What is the primary business objective?"
-        }
-
-        self.error_handlers = {
-            "missing_data": self.handle_missing_data,
-            "invalid_requirement": self.handle_invalid_requirement,
-            "model_error": self.handle_model_error
-        }
+class AdviseAgent(BaseAgent):
+    def __init__(self, model, console: Optional[Console] = None, config: Optional[Dict[str, Any]] = None):
+        super().__init__(model, console, config)
+        self.sys_prompt = self._prepare_prompt("""
+        You are an ML expert advisor who helps data scientists choose the right approach.
+        Provide detailed recommendations based on data analysis and requirements.
+        """)
 
     def handle_missing_data(self, error):
         """Handle cases where data is missing"""

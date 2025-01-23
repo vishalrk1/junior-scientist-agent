@@ -1,20 +1,27 @@
 import openai
 import json
+from typing import Dict, Any, Optional
 
 from buddy.function import get_function, process_function_name, SEARCH_FUNCTIONS
 
 class OpenAIModel:
-    def __init__(self, model, api_key, temperature=0.7):
-        self.model = model if model else "gpt-4o-mini"
+    def __init__(self, api_key: str, parameters: Optional[Dict[str, Any]] = None):
         self.api_key = api_key
-        self.temperature = temperature
+        self.model = parameters.get("model", "gpt-4-mini") if parameters else "gpt-4-mini"
+        self.temperature = parameters.get("temperature", 0.7) if parameters else 0.7
+        self.max_tokens = parameters.get("max_tokens", 2000) if parameters else 2000
         self.client = openai.Client(api_key=api_key)
-    
+        self.func_call_history = []
+
     def query(self, chat_history, **kwargs):
-        parameters = kwargs
+        parameters = {
+            "model": self.model,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            **kwargs
+        }
+        
         completion = self.client.chat.completions.create(
-            model=self.model,
-            temperature=self.temperature,
             messages=chat_history,
             stream=False,
             **parameters
@@ -36,4 +43,3 @@ class OpenAIModel:
             return self.query(chat_history, **parameters)
         else:
             return res.content
-        

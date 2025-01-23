@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Command, File, Inbox, MessageCircle, Plus } from "lucide-react";
+import { Command, File, MessageCircle, Plus } from "lucide-react";
 
 import { Label } from "@/components/ui/label";
 import {
@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/sidebar";
 import { Switch } from "@/components/ui/switch";
 import { NavUser } from "../navbar/nav-user";
-import { dummyProjects } from "@/lib/dummyData";
 
 import useProjects from "@/hooks/useProjects";
 import { formatDate } from "@/utils/formater";

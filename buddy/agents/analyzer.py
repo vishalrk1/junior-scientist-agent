@@ -10,13 +10,14 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.markdown import Markdown
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from buddy.dataclass import AnalysisReport, AnalysisResult
 from buddy.utils import update_config
+from .base import BaseAgent
 
-class AnalyzerAgent:
-    def __init__(self, model, console=None, reports_dir="analysis_reports"):
+class AnalyzerAgent(BaseAgent):
+    def __init__(self, model, console: Optional[Console] = None, config: Optional[Dict[str, Any]] = None):
         """
         AnalyzerAgent: An agent that can analyze data using a model.
 
@@ -24,11 +25,14 @@ class AnalyzerAgent:
             model (Model): A model that can analyze data.
             console (Console): A console to use for input/output.
         """
+        super().__init__(model, console, config)
+        self.sys_prompt = self._prepare_prompt("""
+        You are a data science expert focusing on data analysis and exploration.
+        Your task is to analyze datasets and provide comprehensive insights.
+        """)
 
-        self.model = model
-        self.console = console if console else Console()
         self.analyze_types = ["data_summary", "data_cleaning", "business_insights"]
-        self.report_dir = Path(reports_dir)
+        self.report_dir = Path(config.get("reports_dir", "analysis_reports"))
         self.report_dir.mkdir(exist_ok=True)
 
         self.prompts = {
