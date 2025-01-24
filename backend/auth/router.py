@@ -93,7 +93,11 @@ async def google_login(request: GoogleAuthRequest):
     
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_profile(current_user: dict = Depends(get_current_user)):
-    print(">>> USER: ", str(current_user["_id"]))
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token or user not found",
+        )
     return UserResponse(
         id=str(current_user["_id"]),
         email=current_user["email"],
@@ -103,4 +107,9 @@ async def get_current_user_profile(current_user: dict = Depends(get_current_user
 
 @router.post("/logout")
 async def logout(current_user: dict = Depends(get_current_user)):
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token or user not found",
+        )
     return {"message": "Successfully logged out"}

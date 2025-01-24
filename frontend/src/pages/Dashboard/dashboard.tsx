@@ -57,8 +57,6 @@ const Dashboard = () => {
   const { activeProjectId, getActiveProject } = useProjects();
   const activeProject = getActiveProject();
 
-  console.log(activeProjectId)
-
   return (
     <SidebarProvider
       style={
@@ -106,7 +104,7 @@ const Dashboard = () => {
         </div>
         <div className="flex flex-col gap-1 border-t border-border p-4">
           <div className="flex items-center justify-start bg-background mx-2 gap-1">
-            <TooltipProvider delayDuration={200}>
+            <TooltipProvider delayDuration={200} >
               {CHAT_ACTIONS.map((action, index) => (
                 <TooltipIconButton
                   key={index}

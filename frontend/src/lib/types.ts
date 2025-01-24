@@ -56,9 +56,9 @@ export enum ModelProviders {
 }
 
 export enum ProjectStatus {
-    Active = 'active',
-    Archived = 'archived',
-    Completed = 'completed'
+    active = 'active',
+    archived = 'archived',
+    deleted = 'deleted'
 }
 
 export interface Message {
@@ -114,19 +114,17 @@ export interface ProjectAgentConfig {
 
 export interface Project {
     id: string;
-    user_id: string;
     name: string;
-    description?: string;
-    model_provider: ModelProviders;
-    dataset?: DatasetSchema;
-    status: ProjectStatus;
+    description: string;
+    model_provider: string;
+    api_key: string;
     created_at: string;
-    updated_at: string | null;
+    updated_at: string;
     last_activity: string;
-    default_agent_configs: ProjectAgentConfig[];
+    status: ProjectStatus;
     conversation_ids: string[];
     report_ids: string[];
-    current_conversation_id?: string;
+    current_conversation_id: string | null;
     settings: {
         context_size: number;
         max_reports_per_agent: number;

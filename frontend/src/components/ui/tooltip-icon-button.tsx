@@ -17,7 +17,7 @@ export const TooltipIconButton = ({
   onClick,
 }: TooltipIconButtonProps) => {
   return (
-    <Tooltip>
+    <Tooltip >
       <TooltipTrigger asChild>
         <div
           className="p-2 rounded-full hover:bg-accent cursor-pointer"
@@ -26,7 +26,7 @@ export const TooltipIconButton = ({
           <Icon size={24} />
         </div>
       </TooltipTrigger>
-      <TooltipContent>
+      <TooltipContent className="bg-zinc-900 dark:bg-zinc-950 text-zinc-50">
         <span>{tooltip}</span>
       </TooltipContent>
     </Tooltip>

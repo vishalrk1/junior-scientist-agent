@@ -26,3 +26,11 @@ tantivy~=0.22.0
 pymongo
 motor
 bcrypt==4.0.1
+backoff
+pydantic[email]
+passlib
+pyjwt
+fastapi 
+uvicorn 
+fastapi[all]
+bson

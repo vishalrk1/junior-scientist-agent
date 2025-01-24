@@ -1,6 +1,6 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+import jwt  # PyJWT
 from database import Database
 from config import settings
 from datetime import datetime
@@ -25,7 +25,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
                 detail="Token has expired",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-    except JWTError:
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except jwt.InvalidTokenError:
         raise credentials_exception
 
     users_collection = Database.get_users_collection()

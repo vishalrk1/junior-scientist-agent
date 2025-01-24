@@ -23,12 +23,14 @@ import { ModelProviders } from "@/lib/types";
 import { Textarea } from "../ui/textarea";
 import { Separator } from "../ui/separator";
 import { AnimatePresence, motion } from "framer-motion";
+import useProjects from "@/hooks/useProjects";
 
 interface AddProjectButtonProps {
   className?: string;
 }
 
 const AddProjectButton = ({ className }: AddProjectButtonProps) => {
+  const { createProject } = useProjects();
   const [isOpen, setIsOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -39,11 +41,20 @@ const AddProjectButton = ({ className }: AddProjectButtonProps) => {
 
   const isFormValid = formData.name && formData.modelProvider && formData.apiKey;
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (isFormValid) {
-      console.log("Creating project:", formData);
-      setIsOpen(false);
-      setFormData({ name: "", description: "", modelProvider: "", apiKey: "" });
+      try {
+        await createProject({
+          name: formData.name,
+          description: formData.description,
+          model_provider: formData.modelProvider,
+          api_key: formData.apiKey,
+        });
+        setIsOpen(false);
+        setFormData({ name: "", description: "", modelProvider: "", apiKey: "" });
+      } catch (error) {
+        console.error('Failed to create project:', error);
+      }
     }
   };
 
@@ -65,17 +76,17 @@ const AddProjectButton = ({ className }: AddProjectButtonProps) => {
           <span className="text-sm">Add New Project</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[550px]">
-        <DialogHeader className="space-y-3">
+      <DialogContent className="sm:max-w-[550px] max-h-[95vh] overflow-y-auto custom-scrollbar pr-6">
+        <DialogHeader className="">
           <DialogTitle className="text-2xl font-semibold">Add New Project</DialogTitle>
           <DialogDescription>
             Create a new project by filling out the information below. You'll need an API key from your chosen model provider.
           </DialogDescription>
         </DialogHeader>
-        <Separator className="my-4" />
-        <div className="grid gap-6 py-4">
+        <Separator className="my-0" />
+        <div className="grid gap-4">
           <div className="space-y-4">
-            <div className="space-y-2">
+            <div className="space-y-1">
               <Label htmlFor="name" className="text-sm font-medium">
                 Project Name<span className="text-red-500">*</span>
               </Label>
@@ -88,7 +99,7 @@ const AddProjectButton = ({ className }: AddProjectButtonProps) => {
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1">
               <Label htmlFor="description" className="text-sm font-medium">
                 Description
               </Label>
@@ -101,10 +112,8 @@ const AddProjectButton = ({ className }: AddProjectButtonProps) => {
               />
             </div>
           </div>
-
-          <Separator className="my-2" />
-
-          <div className="space-y-4">
+          <Separator className="my-0" />
+          <div className="">
             <div className="space-y-2">
               <Label htmlFor="model-provider" className="text-sm font-medium">
                 Model Provider<span className="text-red-500">*</span>
@@ -134,9 +143,9 @@ const AddProjectButton = ({ className }: AddProjectButtonProps) => {
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
                   transition={{ duration: 0.2 }}
-                  className="space-y-2"
+                  className="space-y-2 mt-4"
                 >
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     <Label htmlFor="api-key" className="text-sm font-medium flex items-center justify-between">
                       <span>
                         API Key<span className="text-red-500">*</span>
