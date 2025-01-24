@@ -52,6 +52,7 @@ const useProjects = create<ProjectStore>((set, get) => ({
 
   updateProject: async (projectId: string, updates: Partial<Project>) => {
     set({ isLoading: true, error: null });
+    console.log(updates)
     try {
       const updatedProject = await projectApi.updateProject(projectId, updates);
       set(state => ({

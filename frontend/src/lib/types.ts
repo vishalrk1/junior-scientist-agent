@@ -112,6 +112,43 @@ export interface ProjectAgentConfig {
     additional_prompt?: string;
 }
 
+export interface ModelConfig {
+    name: string;
+    displayName: string;
+    contextLimit: number;
+    isDefault: boolean;
+}
+
+export interface ProviderModels {
+    [key: string]: ModelConfig[];
+}
+
+export const DefaultModels: ProviderModels = {
+    openai: [
+        { name: 'gpt-4o', displayName: 'GPT-4 Optimized', contextLimit: 8192, isDefault: true },
+        { name: 'gpt-4', displayName: 'GPT-4', contextLimit: 8192, isDefault: false },
+        { name: 'gpt-3.5-turbo', displayName: 'GPT-3.5 Turbo', contextLimit: 4096, isDefault: false },
+    ],
+    gemini: [
+        { name: 'gemini-pro', displayName: 'Gemini Pro', contextLimit: 32768, isDefault: true },
+        { name: 'gemini-pro-vision', displayName: 'Gemini Pro Vision', contextLimit: 16384, isDefault: false },
+    ]
+};
+
+export const getDefaultModelForProvider = (provider: string): string => {
+    const models = DefaultModels[provider];
+    if (!models) return 'gpt-4o';
+    const defaultModel = models.find(m => m.isDefault);
+    return defaultModel ? defaultModel.name : models[0].name;
+};
+
+export interface ProjectSettings {
+    context_size: number;
+    max_reports_per_agent: number;
+    auto_save_interval: number;
+    selected_model: string;
+}
+
 export interface Project {
     id: string;
     name: string;
@@ -125,12 +162,14 @@ export interface Project {
     conversation_ids: string[];
     report_ids: string[];
     current_conversation_id: string | null;
-    settings: {
-        context_size: number;
-        max_reports_per_agent: number;
-        auto_save_interval: number;
-    };
+    settings: ProjectSettings;
+    available_models: string[];
 }
+
+export const AVAILABLE_MODELS = {
+    openai: ['gpt-4o', 'gpt-4', 'gpt-3.5-turbo'],
+    gemini: ['gemini-pro', 'gemini-pro-vision']
+} as const;
 
 export interface Report {
     id: string;

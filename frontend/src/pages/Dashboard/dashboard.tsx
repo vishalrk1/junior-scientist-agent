@@ -12,7 +12,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { Folder, Globe, Plus, Settings, Settings2, Star } from "lucide-react";
+import { Folder, Globe, Settings2, Star } from "lucide-react";
 import useProjects from "@/hooks/useProjects";
 
 import React from "react";
@@ -22,6 +22,15 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { TooltipIconButton } from "@/components/ui/tooltip-icon-button";
 import { Project } from "@/lib/types";
 import AddProjectButton from "@/components/button/addProject";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import SettingsButton from "@/components/button/settingsButton";
+import ModelUpdateDropdown from "@/components/button/modelUpdateDropdown";
 
 const CHAT_ACTIONS = [
   { icon: Folder, tooltip: "Upload Files" },
@@ -46,9 +55,7 @@ const HeaderActions = ({
         <Star />
       </Button>
       <Separator orientation="vertical" className="mr-2 h-4" />
-      <Button variant="ghost" size="icon" className="h-7 w-7">
-        <Settings />
-      </Button>
+      <SettingsButton />
     </div>
   </div>
 );
@@ -103,16 +110,21 @@ const Dashboard = () => {
           )}
         </div>
         <div className="flex flex-col gap-1 border-t border-border p-4">
-          <div className="flex items-center justify-start bg-background mx-2 gap-1">
-            <TooltipProvider delayDuration={200} >
-              {CHAT_ACTIONS.map((action, index) => (
-                <TooltipIconButton
-                  key={index}
-                  icon={action.icon}
-                  tooltip={action.tooltip}
-                />
-              ))}
-            </TooltipProvider>
+          <div className="flex items-center justify-between bg-background mx-2 gap-1">
+            <div className="flex items-center justify-start bg-background mx-2 gap-1">
+              <TooltipProvider delayDuration={200}>
+                {CHAT_ACTIONS.map((action, index) => (
+                  <TooltipIconButton
+                    key={index}
+                    icon={action.icon}
+                    tooltip={action.tooltip}
+                  />
+                ))}
+              </TooltipProvider>
+            </div>
+            {activeProject && (
+              <ModelUpdateDropdown activeProject={activeProject} />
+            )}
           </div>
           <ChatInput />
         </div>

@@ -10,7 +10,8 @@ from typing import List, Optional
 from datetime import datetime
 from models.project import (
     Project, ProjectResponse, ProjectUpdate, 
-    DatasetSchema, ProjectStatus
+    DatasetSchema, ProjectStatus, ProjectSettings,
+    AVAILABLE_MODELS  # Add this import
 )
 from models.agent import Agent, AgentType, ParameterSchema
 from auth.dependencies import get_current_user
@@ -49,7 +50,6 @@ async def create_project(project: Project, current_user: dict = Depends(get_curr
         async with session.start_transaction():
             now = datetime.utcnow()
             
-            # Create agent configs first
             default_agent_configs = []
             for agent_type, config in DEFAULT_AGENT_CONFIGS.items():
                 agent_config = ProjectAgentConfig(
@@ -59,6 +59,7 @@ async def create_project(project: Project, current_user: dict = Depends(get_curr
                 )
                 default_agent_configs.append(agent_config)
 
+            default_settings = ProjectSettings.get_defaults(project.model_provider)
             project_data = {
                 "name": project.name,
                 "description": project.description,
@@ -72,15 +73,11 @@ async def create_project(project: Project, current_user: dict = Depends(get_curr
                 "conversation_ids": [],
                 "report_ids": [],
                 "current_conversation_id": None,
-                "settings": {
-                    "context_size": 10,
-                    "max_reports_per_agent": 5,
-                    "auto_save_interval": 300
-                },
-                "default_agent_configs": [config.model_dump() for config in default_agent_configs]
+                "settings": default_settings.model_dump(),
+                "default_agent_configs": [config.model_dump() for config in default_agent_configs],
+                "available_models": AVAILABLE_MODELS.get(str(project.model_provider), []),
             }
 
-            # Insert project
             result = await Database.execute_with_retry(
                 projects_collection,
                 'insert_one',
@@ -89,8 +86,6 @@ async def create_project(project: Project, current_user: dict = Depends(get_curr
             )
             
             project_id = str(result.inserted_id)
-            
-            # Create agent instances
             agents_to_create = []
             for agent_type, config in DEFAULT_AGENT_CONFIGS.items():
                 agent_data = {
@@ -125,13 +120,28 @@ async def list_projects(
     if status:
         query["status"] = status
         
-    cursor = projects_collection.find(query).sort("last_activity", -1)
+    cursor = projects_collection.find(query).sort("created_at", -1)
     projects = await Database.execute_with_retry(
         cursor,
         'to_list',
         length=None
     )
     
+    for project in projects:
+        if "settings" not in project:
+            project["settings"] = ProjectSettings.get_defaults(
+                project.get("model_provider", "openai")
+            ).dict()
+        elif isinstance(project["settings"], dict):
+            default_settings = ProjectSettings.get_defaults(
+                project.get("model_provider", "openai")
+            ).dict()
+            default_settings.update(project["settings"])
+            project["settings"] = default_settings
+        
+        provider = project.get("model_provider", "openai")
+        project["available_models"] = AVAILABLE_MODELS.get(provider, [])
+            
     return [ProjectResponse(**{**project, "id": str(project["_id"])}) for project in projects]
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -152,6 +162,10 @@ async def get_project(project_id: str, current_user: dict = Depends(get_current_
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found"
         )
+    
+    if project:
+        provider = project.get("model_provider", "openai")
+        project["available_models"] = AVAILABLE_MODELS.get(provider, [])
     
     return ProjectResponse(**{**project, "id": str(project["_id"])})
 
@@ -176,30 +190,66 @@ async def update_project(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found"
         )
+    
     update_dict = update_data.model_dump(exclude_unset=True)
     if "api_key" in update_dict:
-        encrypted_key = fernet.encrypt(update_dict["api_key"].get_secret_value().encode())
+        encrypted_key = base64.b64encode(project.api_key.encode()).decode()
         update_dict["api_key"] = encrypted_key.decode()
-    
     update_dict["updated_at"] = datetime.utcnow()
     update_dict["last_activity"] = datetime.utcnow()
-    
-    # Update project
+
     await Database.execute_with_retry(
         projects_collection,
         'update_one',
         {"_id": ObjectId(project_id)},
         {"$set": update_dict}
     )
-    
-    # Get updated project
     updated_project = await Database.execute_with_retry(
         projects_collection,
         'find_one',
         {"_id": ObjectId(project_id)}
     )
-    
     return ProjectResponse(**{**updated_project, "id": str(updated_project["_id"])})
+
+@router.patch("/{project_id}/settings")
+async def update_project_settings(
+    project_id: str,
+    settings: ProjectSettings,
+    current_user: dict = Depends(get_current_user)
+):
+    projects_collection = Database.get_projects_collection()
+    project = await Database.execute_with_retry(
+        projects_collection,
+        'find_one',
+        {
+            "_id": ObjectId(project_id),
+            "user_id": str(current_user["_id"])
+        }
+    )
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if settings.selected_model not in AVAILABLE_MODELS[project['model_provider']]:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid model for provider {project['model_provider']}"
+        )
+    
+    await Database.execute_with_retry(
+        projects_collection,
+        'update_one',
+        {"_id": ObjectId(project_id)},
+        {
+            "$set": {
+                "settings": settings.dict(),
+                "updated_at": datetime.utcnow(),
+                "last_activity": datetime.utcnow()
+            }
+        }
+    )
+    
+    return {"settings": settings.dict()}
 
 @router.post("/{project_id}/dataset")
 async def add_dataset(
@@ -223,7 +273,6 @@ async def add_dataset(
             detail="Project not found"
         )
     
-    # Update project with dataset
     await Database.execute_with_retry(
         projects_collection,
         'update_one',

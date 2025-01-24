@@ -7,7 +7,7 @@ from buddy.function import get_function, process_function_name, SEARCH_FUNCTIONS
 class OpenAIModel:
     def __init__(self, api_key: str, parameters: Optional[Dict[str, Any]] = None):
         self.api_key = api_key
-        self.model = parameters.get("model", "gpt-4-mini") if parameters else "gpt-4-mini"
+        self.model_name = parameters.get("selected_model", "gpt-4o") if parameters else "gpt-4o"
         self.temperature = parameters.get("temperature", 0.7) if parameters else 0.7
         self.max_tokens = parameters.get("max_tokens", 2000) if parameters else 2000
         self.client = openai.Client(api_key=api_key)
@@ -15,7 +15,7 @@ class OpenAIModel:
 
     def query(self, chat_history, **kwargs):
         parameters = {
-            "model": self.model,
+            "model": self.model_name,
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
             **kwargs
