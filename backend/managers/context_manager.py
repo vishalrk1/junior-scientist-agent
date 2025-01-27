@@ -1,9 +1,9 @@
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 
-from backend.models.conversation import Conversation, Message
-from backend.models.agent import AgentType
-from backend.database import Database
+from models.conversation import Conversation, Message
+from models.agent import AgentType
+from database import Database
 
 class ContextManager:
     def __init__(self, project_id: str, context_window: int = 10):

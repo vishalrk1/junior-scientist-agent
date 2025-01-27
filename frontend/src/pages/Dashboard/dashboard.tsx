@@ -22,15 +22,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { TooltipIconButton } from "@/components/ui/tooltip-icon-button";
 import { Project } from "@/lib/types";
 import AddProjectButton from "@/components/button/addProject";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import SettingsButton from "@/components/button/settingsButton";
 import ModelUpdateDropdown from "@/components/button/modelUpdateDropdown";
+import ChatSection from "@/components/chat/chat-section";
 
 const CHAT_ACTIONS = [
   { icon: Folder, tooltip: "Upload Files" },
@@ -89,7 +83,7 @@ const Dashboard = () => {
           <HeaderActions activeProject={activeProject} />
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4">
-          {!activeProjectId && (
+          {!activeProjectId ? (
             <div className="flex flex-col items-center justify-center gap-4 w-full h-full">
               <div className="flex flex-col items-center gap-2">
                 <div className="flex gap-3 items-center justify-center">
@@ -107,6 +101,8 @@ const Dashboard = () => {
               </div>
               <AddProjectButton />
             </div>
+          ) : (
+            <ChatSection />
           )}
         </div>
         <div className="flex flex-col gap-1 border-t border-border p-4">

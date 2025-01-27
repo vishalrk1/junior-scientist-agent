@@ -1,3 +1,4 @@
+import shutil
 # POST /projects - Create new project
 # GET /projects - List all projects
 # GET /projects/{project_id} - Get single project
@@ -5,7 +6,7 @@
 # POST /projects/{project_id}/dataset - Add dataset
 # DELETE /projects/{project_id} - Delete project
 
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, File, UploadFile
 from typing import List, Optional
 from datetime import datetime
 from models.project import (
@@ -19,9 +20,12 @@ from database import Database
 from bson import ObjectId
 from config import settings
 import base64
+import pandas as pd
+import os
 
 from models.project import ProjectAgentConfig
 from models.agent import AgentStatus
+from utils.project_setup import setup_project_directory
 
 DEFAULT_AGENT_CONFIGS = {
     AgentType.analyzer: {
@@ -49,7 +53,6 @@ async def create_project(project: Project, current_user: dict = Depends(get_curr
     async with await Database.client.start_session() as session:
         async with session.start_transaction():
             now = datetime.utcnow()
-            
             default_agent_configs = []
             for agent_type, config in DEFAULT_AGENT_CONFIGS.items():
                 agent_config = ProjectAgentConfig(
@@ -59,7 +62,6 @@ async def create_project(project: Project, current_user: dict = Depends(get_curr
                 )
                 default_agent_configs.append(agent_config)
 
-            default_settings = ProjectSettings.get_defaults(project.model_provider)
             project_data = {
                 "name": project.name,
                 "description": project.description,
@@ -73,7 +75,7 @@ async def create_project(project: Project, current_user: dict = Depends(get_curr
                 "conversation_ids": [],
                 "report_ids": [],
                 "current_conversation_id": None,
-                "settings": default_settings.model_dump(),
+                "settings": ProjectSettings.get_defaults(project.model_provider).model_dump(),
                 "default_agent_configs": [config.model_dump() for config in default_agent_configs],
                 "available_models": AVAILABLE_MODELS.get(str(project.model_provider), []),
             }
@@ -86,6 +88,34 @@ async def create_project(project: Project, current_user: dict = Depends(get_curr
             )
             
             project_id = str(result.inserted_id)
+            try:
+                project_dir = setup_project_directory(
+                    project_id=project_id,
+                    platform=project.model_provider,
+                    api_key=project.api_key
+                )
+                await Database.execute_with_retry(
+                    projects_collection,
+                    'update_one',
+                    {"_id": ObjectId(project_id)},
+                    {"$set": {"project_dir": project_dir}},
+                    session=session
+                )
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to initialize project workspace"
+                )
+
+            default_agent_configs = []
+            for agent_type, config in DEFAULT_AGENT_CONFIGS.items():
+                agent_config = ProjectAgentConfig(
+                    agent_type=agent_type,
+                    parameters=ParameterSchema(**config["parameters"]),
+                    additional_prompt=config.get("additional_prompt")
+                )
+                default_agent_configs.append(agent_config)
+
             agents_to_create = []
             for agent_type, config in DEFAULT_AGENT_CONFIGS.items():
                 agent_data = {
@@ -108,6 +138,7 @@ async def create_project(project: Project, current_user: dict = Depends(get_curr
                 )
 
             project_data["id"] = project_id
+            project_data["project_dir"] = project_dir
             return ProjectResponse(**project_data)
 
 @router.get("", response_model=List[ProjectResponse])
@@ -254,7 +285,7 @@ async def update_project_settings(
 @router.post("/{project_id}/dataset")
 async def add_dataset(
     project_id: str,
-    dataset: DatasetSchema,
+    file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
     projects_collection = Database.get_projects_collection()
@@ -272,39 +303,125 @@ async def add_dataset(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Project not found"
         )
-    
-    await Database.execute_with_retry(
-        projects_collection,
-        'update_one',
-        {"_id": ObjectId(project_id)},
-        {
-            "$set": {
-                "dataset": dataset.model_dump(),
-                "updated_at": datetime.utcnow(),
-                "last_activity": datetime.utcnow()
-            }
+
+    try:
+        project_dir = project.get("project_dir")
+        if not project_dir:
+            project_dir = setup_project_directory(
+                project_id=project_id,
+                platform=project["model_provider"],
+                api_key=base64.b64decode(project["api_key"]).decode()
+            )
+            
+        data_dir = os.path.join(project_dir, "data")
+        os.makedirs(data_dir, exist_ok=True)
+        
+        file_path = os.path.join(data_dir, file.filename)
+        contents = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(contents)
+            
+        # Reset file cursor and read CSV
+        await file.seek(0)
+        df = pd.read_csv(file_path)
+        schema = {
+            col: str(dtype) for col, dtype in df.dtypes.items()
         }
-    )
-    
-    return {"message": "Dataset added successfully"}
+        
+        statistics = {
+            "rows": len(df),
+            "columns": len(df.columns),
+            "column_names": df.columns.tolist(),
+            "missing_values": df.isnull().sum().to_dict()
+        }
+        
+        dataset = DatasetSchema(
+            name=file.filename,
+            path=file_path,
+            description=f"Uploaded file: {file.filename}",
+            schema=schema,
+            statistics=statistics
+        )
+        
+        # Update project with dataset info and return updated project
+        updated_project = await Database.execute_with_retry(
+            projects_collection,
+            'find_one_and_update',
+            {"_id": ObjectId(project_id)},
+            {
+                "$set": {
+                    "dataset": dataset.model_dump(),
+                    "updated_at": datetime.utcnow(),
+                    "last_activity": datetime.utcnow()
+                }
+            },
+            return_document=True
+        )
+        
+        return {
+            "message": "Dataset added successfully",
+            "dataset": dataset.model_dump(),
+            "project": ProjectResponse(**{**updated_project, "id": str(updated_project["_id"])}).model_dump()
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error processing dataset: {str(e)}"
+        )
 
 @router.delete("/{project_id}")
 async def delete_project(project_id: str, current_user: dict = Depends(get_current_user)):
     projects_collection = Database.get_projects_collection()
+    agents_collection = Database.get_agents_collection()
     
-    result = await Database.execute_with_retry(
-        projects_collection,
-        'delete_one',
-        {
-            "_id": ObjectId(project_id),
-            "user_id": str(current_user["_id"])
-        }
-    )
+    async with await Database.client.start_session() as session:
+        async with session.start_transaction():
+            # First get the project to check its directory
+            project = await Database.execute_with_retry(
+                projects_collection,
+                'find_one',
+                {
+                    "_id": ObjectId(project_id),
+                    "user_id": str(current_user["_id"])
+                }
+            )
+            if not project:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Project not found"
+                )
+
+            if project.get("project_dir"):
+                try:
+                    shutil.rmtree(project["project_dir"], ignore_errors=True)
+                except Exception as e:
+                    print(f"Error deleting project directory: {str(e)}")
+                    
+            await Database.execute_with_retry(
+                agents_collection,
+                'delete_many',
+                {"project_id": project_id},
+                session=session
+            )
+            conversations_collection = await Database.get_collection("conversations")
+            await Database.execute_with_retry(
+                conversations_collection,
+                'delete_many',
+                {"project_id": project_id},
+                session=session
+            )
+            result = await Database.execute_with_retry(
+                projects_collection,
+                'delete_one',
+                {"_id": ObjectId(project_id)},
+                session=session
+            )
+
+            if result.deleted_count == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Project not found"
+                )
     
-    if result.deleted_count == 0:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
-        )
-    
-    return {"message": "Project deleted successfully"}
+    return {"message": "Project and associated resources deleted successfully"}

@@ -6,11 +6,11 @@ from typing import Optional, List, Dict, Any
 
 from buddy.model import load_model
 from buddy.agents import AdviseAgent, AnalyzerAgent, PlannerAgent
-from backend.models.project import Project, ProjectStatus
-from backend.models.conversation import Conversation, Message, MessageType
-from backend.models.agent import Agent, AgentType
-from backend.models.report import Report
-from backend.database import Database
+from models.project import Project, ProjectStatus
+from models.conversation import Conversation, Message, MessageType
+from models.agent import Agent, AgentType
+from models.report import Report
+from database import Database
 from .context_manager import ContextManager
 
 class WorkflowManager:

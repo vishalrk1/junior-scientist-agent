@@ -32,7 +32,7 @@ DEFAULT_MODELS = {
 }
 
 AVAILABLE_MODELS = {
-    "openai": ["gpt-4o", "gpt-4", "gpt-3.5-turbo"],
+    "openai": ["gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"],
     "gemini": ["gemini-pro", "gemini-pro-vision"]
 }
 
@@ -67,6 +67,7 @@ class Project(MongoModel):
     conversation_ids: List[str] = Field(default_factory=list)
     report_ids: List[str] = Field(default_factory=list)
     current_conversation_id: Optional[str] = None
+    project_dir: Optional[str] = None
 
     def __init__(self, **data):
         if 'settings' not in data:
