@@ -1,4 +1,3 @@
-import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -7,15 +6,10 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Folder, Globe, Settings2, Star } from "lucide-react";
 import useProjects from "@/hooks/useProjects";
 
-import React from "react";
 import { formatDate } from "@/utils/formater";
 import ChatInput from "@/components/textbox/chatInput";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -59,73 +53,64 @@ const Dashboard = () => {
   const activeProject = getActiveProject();
 
   return (
-    <SidebarProvider
-      style={
-        {
-          "--sidebar-width": "350px",
-        } as React.CSSProperties
-      }
-    >
-      <AppSidebar />
-      <SidebarInset>
-        <header className="sticky top-0 flex shrink-0 items-center gap-2 border-b bg-background p-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-2 h-4" />
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbPage className="line-clamp-1 text-lg font-semibold">
-                  {activeProject?.name}
-                </BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-          <HeaderActions activeProject={activeProject} />
-        </header>
-        <div className="flex flex-1 flex-col gap-4 p-4">
-          {!activeProjectId ? (
-            <div className="flex flex-col items-center justify-center gap-4 w-full h-full">
-              <div className="flex flex-col items-center gap-2">
-                <div className="flex gap-3 items-center justify-center">
-                  <div className="rounded-full bg-primary/10 p-3">
-                    <Settings2 className="h-6 w-6 text-primary" />
-                  </div>
-                  <h1 className="text-4xl font-bold text-primary">
-                    Data Buddy
-                  </h1>
+    <>
+      <header className="sticky top-0 flex shrink-0 items-center gap-2 border-b bg-background p-4">
+        <SidebarTrigger className="-ml-1" />
+        <Separator orientation="vertical" className="mr-2 h-4" />
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbPage className="line-clamp-1 text-lg font-semibold">
+                {activeProject?.name}
+              </BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+        <HeaderActions activeProject={activeProject} />
+      </header>
+      <div className="flex flex-1 flex-col gap-4 p-4">
+        {!activeProjectId ? (
+          <div className="flex flex-col items-center justify-center gap-4 w-full h-full">
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex gap-3 items-center justify-center">
+                <div className="rounded-full bg-primary/10 p-3">
+                  <Settings2 className="h-6 w-6 text-primary" />
                 </div>
-                <p className="text-lg text-center text-muted-foreground max-w-md">
-                  Meet your junior data scientist and start working on your base
-                  models
-                </p>
+                <h1 className="text-4xl font-bold text-primary">
+                  Data Buddy
+                </h1>
               </div>
-              <AddProjectButton />
+              <p className="text-lg text-center text-muted-foreground max-w-md">
+                Meet your junior data scientist and start working on your base
+                models
+              </p>
             </div>
-          ) : (
-            <ChatSection />
+            <AddProjectButton />
+          </div>
+        ) : (
+          <ChatSection />
+        )}
+      </div>
+      <div className="flex flex-col gap-1 border-t border-border p-4">
+        <div className="flex items-center justify-between bg-background mx-2 gap-1">
+          <div className="flex items-center justify-start bg-background mx-2 gap-1">
+            <TooltipProvider delayDuration={200}>
+              {CHAT_ACTIONS.map((action, index) => (
+                <TooltipIconButton
+                  key={index}
+                  icon={action.icon}
+                  tooltip={action.tooltip}
+                />
+              ))}
+            </TooltipProvider>
+          </div>
+          {activeProject && (
+            <ModelUpdateDropdown activeProject={activeProject} />
           )}
         </div>
-        <div className="flex flex-col gap-1 border-t border-border p-4">
-          <div className="flex items-center justify-between bg-background mx-2 gap-1">
-            <div className="flex items-center justify-start bg-background mx-2 gap-1">
-              <TooltipProvider delayDuration={200}>
-                {CHAT_ACTIONS.map((action, index) => (
-                  <TooltipIconButton
-                    key={index}
-                    icon={action.icon}
-                    tooltip={action.tooltip}
-                  />
-                ))}
-              </TooltipProvider>
-            </div>
-            {activeProject && (
-              <ModelUpdateDropdown activeProject={activeProject} />
-            )}
-          </div>
-          <ChatInput />
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+        <ChatInput />
+      </div>
+    </>
   );
 };
 

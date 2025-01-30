@@ -1,45 +1,25 @@
 import * as React from "react";
-import { File, MessageCircle } from "lucide-react";
-
+import { useLocation } from "react-router-dom";
 import { Label } from "@/components/ui/label";
 import {
   Sidebar,
   SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
   SidebarHeader,
-  SidebarMenu,
-  SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Switch } from "@/components/ui/switch";
 import useProjects from "@/hooks/useProjects";
 import useAuthStore from "@/hooks/useAuthStore";
-import { LoginCard } from "../cards/login-card";
-import AddProjectButton from "../button/addProject";
+import useNavStore, { navItems } from "@/store/useNavStore";
 import { IconSidebar } from "./icon-sidebar";
-import { ProjectList } from "./project-list";
-
-const navItems = [
-  {
-    title: "Chats",
-    url: "#",
-    icon: MessageCircle,
-    isActive: true,
-  },
-  {
-    title: "Reports",
-    url: "#",
-    icon: File,
-    isActive: false,
-  },
-];
+import RagSidebar from "./rag-sidebar";
+import ProjectSidebar from "./project-sidebar";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const [activeItem, setActiveItem] = React.useState(navItems[0]);
-  const { projects, activeProjectId, setActiveProject, fetchProjects, isLoading } = useProjects();
+  const location = useLocation();
+  const { activeItem } = useNavStore();
+  const { setActiveProject, fetchProjects } = useProjects();
   const { isAuthenticated, user } = useAuthStore();
 
-  // Add effect to fetch projects when authenticated
   React.useEffect(() => {
     if (isAuthenticated) {
       fetchProjects();
@@ -91,28 +71,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </div>
         </SidebarHeader>
         <SidebarContent className="flex flex-col flex-grow">
-          {isAuthenticated ? (
-            <>
-              <SidebarMenu className="px-0">
-                <SidebarMenuItem className="mt-3 mx-2">
-                  <AddProjectButton className="w-full" />
-                </SidebarMenuItem>
-              </SidebarMenu>
-
-              <SidebarGroup className="px-0 flex-grow">
-                <SidebarGroupContent>
-                  <ProjectList 
-                    projects={projects}
-                    activeProjectId={activeProjectId}
-                    isLoading={isLoading}
-                  />
-                </SidebarGroupContent>
-              </SidebarGroup>
-            </>
+          {location.pathname === "/rag" ? (
+            <RagSidebar />
           ) : (
-            <div className="flex-grow flex items-end p-4">
-              <LoginCard />
-            </div>
+            <ProjectSidebar />
           )}
         </SidebarContent>
       </Sidebar>
