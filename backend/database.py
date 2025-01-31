@@ -5,6 +5,7 @@ from pymongo import IndexModel, ASCENDING, DESCENDING
 from config import settings
 from typing import Optional
 import backoff
+from bson.son import SON 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

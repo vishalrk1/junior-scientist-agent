@@ -7,3 +7,5 @@ buddy.egg-info/
 backend/config.py
 encryption.py
 encryption_key.key
+
+.env

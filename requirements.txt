@@ -34,3 +34,6 @@ fastapi
 uvicorn 
 fastapi[all]
 bson
+PyPDF2
+faiss-cpu
+scikit-learn
