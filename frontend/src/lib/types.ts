@@ -212,9 +212,28 @@ export interface Report {
   updated_at: string;
 }
 
+export interface Source {
+  title: string;
+  similarity: string;
+}
+
+export interface Chat {
+  question: string;
+  answer: string;
+  sources: Source[];
+  timestamp: string;
+}
+
+export interface ChatMessage {
+  role: 'ai' | 'user';
+  content: string;
+  source?: Source[]
+}
+
 export interface RagSession {
   id: string;
   title: string;
+  messages: ChatMessage[]; 
   description: string;
   documents: string[];
   created_at: string;
