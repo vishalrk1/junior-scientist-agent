@@ -1,9 +1,10 @@
 import os 
 import json
 import tempfile
-from typing import List, Dict, Optional
 import logging
+from io import BytesIO
 from openai import OpenAI
+from typing import List, Dict, Optional
 
 from rag.IVFPQVectorDB import IVFPQVectorDB
 from rag.doc_processor import DocumentProcessor
@@ -29,18 +30,18 @@ class RagSystem:
         )
         return response.data[0].embedding
     
-    def process_files(self, files: List) -> int:
+    async def process_files(self, files: List) -> int:
+        chunks = []
         for file in files:
-            chunks = self.doc_processor.process_files(file)
-            self.chunks.extend(chunks)
-        self._load_vector_store()
-        return len(self.chunks)
-
-    def process_one_file(self, file):
-        print(">>> Processing file")
-        chunks = self.doc_processor.process_files(file)
+            content = await file.read()
+            file_obj = BytesIO(content)
+            file_obj.name = file.filename
+            file_chunks = self.doc_processor.process_files(file_obj)
+            chunks.extend(file_chunks)
+            await file.seek(0)
         self.chunks.extend(chunks)
-        return chunks
+        self._load_vector_store()
+        return len(chunks)
     
     def _load_vector_store(self):
         os.makedirs(f'data/rag_sessions/{self.session_id}', exist_ok=True)
@@ -67,7 +68,7 @@ class RagSystem:
 
     def chat(self, question: str, temperature: Optional[float] = None) -> Dict:
         try:
-            relevant_docs = self.vector_db.search(question, k=4, similarity_threshold=0.4)
+            relevant_docs = self.vector_db.search(question, k=4, similarity_threshold=0.2)
             if not relevant_docs:
                 return {
                     "answer": "I couldn't find any relevant information to answer your question.",
@@ -82,7 +83,7 @@ class RagSystem:
             ]
 
             if self.memory:
-                last_exchanges = self.memory[-2:]  # Last 1 Q&A pairs
+                last_exchanges = self.memory[-2:]
                 messages[1:1] = last_exchanges
 
             response = self.client.chat.completions.create(
@@ -93,16 +94,16 @@ class RagSystem:
             )
 
             answer = response.choices[0].message.content
-
-            # Update memory
             self.memory.extend([
                 {"role": "user", "content": question},
                 {"role": "assistant", "content": answer}
             ])
-
             return {
                 "answer": answer,
-                "sources": [doc['metadata']["title"] for doc in relevant_docs]
+                "sources": [{
+                    "title": doc['metadata']["title"],
+                    "similarity": doc['similarity']
+                } for doc in relevant_docs]
             }
 
         except Exception as e:

@@ -67,7 +67,6 @@ async def upload_files(
     files: List[UploadFile] = File(...),
     user = Depends(get_current_user)
 ):
-    print("User: ", user)
     collection = await Database.get_collection("rag_sessions")
     session_doc = await collection.find_one({
         "_id": ObjectId(session_id), 
@@ -88,15 +87,11 @@ async def upload_files(
 
     try:
         processed_files = []
-        total_chunks = 0
         for file in files:
-            content = await file.read()
-            file_obj = BytesIO(content)
-            file_obj.name = file.filename
-            chunks = rag_system.process_one_file(file_obj)
-            total_chunks += len(chunks)
             processed_files.append(file.filename)
-            await file.seek(0)
+        
+        total_chunks = await rag_system.process_files(files)
+        print(f"Processed {len(files)} files into {total_chunks} chunks")
 
         await collection.update_one(
             {"_id": ObjectId(session_id)},
@@ -110,15 +105,19 @@ async def upload_files(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/history")
+async def get_chat_history(user = Depends(get_current_user)):
+    collection = await Database.get_collection("rag_sessions")
+    sessions = await collection.find({"user_id": str(user["_id"])})
+    return [RagSession.parse_obj(session).to_response() for session in sessions]
+
 @router.post("/{session_id}/chat")
 async def chat(
     session_id: str,
-    data: dict = Body(...),  # Change this line
+    data: dict = Body(...),
     user = Depends(get_current_user)
 ):
-    """Chat with a RAG session"""
-    message = data.get("message")  # Extract message from request body
-    print(">>> USer Query: ", message)
+    message = data.get("message")
     if not message:
         raise HTTPException(status_code=400, detail="Message is required")
 
@@ -132,7 +131,6 @@ async def chat(
         raise HTTPException(status_code=404, detail="Session not found")
         
     session = RagSession.parse_obj(session_doc)
-    print(">>> Session Found: ", session)
 
     rag_system = RAG_SESSIONS.get(session_id)
     if not rag_system:
@@ -146,7 +144,6 @@ async def chat(
         )
         
         response = rag_system.chat(message)
-        print(">>> AI Response: ", response)
         ai_message = ChatMessage(
             role="ai",
             content=response["answer"],
@@ -173,3 +170,4 @@ async def chat(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+

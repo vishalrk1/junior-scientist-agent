@@ -9,3 +9,5 @@ encryption.py
 encryption_key.key
 
 .env
+
+backend/data

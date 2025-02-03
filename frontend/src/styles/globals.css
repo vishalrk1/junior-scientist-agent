@@ -1,0 +1,28 @@
+/* Markdown Styles */
+.prose {
+  @apply text-foreground;
+}
+
+.prose p {
+  @apply mb-4;
+}
+
+.prose ol {
+  @apply list-decimal pl-4 mb-4;
+}
+
+.prose ul {
+  @apply list-disc pl-4 mb-4;
+}
+
+.prose strong {
+  @apply font-semibold;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  @apply font-bold mb-4;
+}
+
+.prose code {
+  @apply bg-muted px-1 py-0.5 rounded;
+}

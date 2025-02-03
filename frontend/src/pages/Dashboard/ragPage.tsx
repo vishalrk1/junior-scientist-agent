@@ -42,13 +42,8 @@ const RagPage = () => {
     setInputError("");
 
     try {
-      // Add user message first
       addUserMessage(message);
-
-      // Get AI response
       await addAiMessage(message, currentSession.id);
-
-      // Clear input after successful submission
       setMessage("");
     } catch (err) {
       setInputError("Failed to send message. Please try again.");
