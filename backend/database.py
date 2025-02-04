@@ -16,6 +16,7 @@ class Database:
     users_collection = None
     projects_collection = None
     agents_collection = None
+    rag_sessions_collection = None
     
     @classmethod
     @backoff.on_exception(backoff.expo, ConnectionFailure, max_tries=3)
@@ -35,8 +36,8 @@ class Database:
             cls.users_collection = cls.db.users
             cls.projects_collection = cls.db.projects
             cls.agents_collection = cls.db.agents
+            cls.rag_sessions_collection = cls.db.rag_sessions
             
-            # Create indexes with try-except blocks
             try:
                 await cls.users_collection.create_indexes([
                     IndexModel([("email", ASCENDING)], unique=True),
@@ -72,6 +73,19 @@ class Database:
                 if not "already exists" in str(e):
                     raise
                 logger.info("Agents collection indexes already exist")
+
+            try:
+                await cls.rag_sessions_collection.create_indexes([
+                    IndexModel([("user_id", ASCENDING)]),
+                    IndexModel([("created_at", DESCENDING)]),
+                    IndexModel([("updated_at", DESCENDING)]),
+                    IndexModel([("title", ASCENDING)]),
+                    IndexModel([("documents", ASCENDING)])
+                ])
+            except OperationFailure as e:
+                if not "already exists" in str(e):
+                    raise
+                logger.info("RAG sessions collection indexes already exist")
 
             logger.info("Database indexes checked/created.")
             
@@ -111,6 +125,12 @@ class Database:
         if cls.agents_collection is None:
             raise Exception("Database not initialized. Make sure to call connect_db first.")
         return cls.agents_collection
+
+    @classmethod
+    def get_rag_sessions_collection(cls):
+        if cls.rag_sessions_collection is None:
+            raise Exception("Database not initialized. Make sure to call connect_db first.")
+        return cls.rag_sessions_collection
 
     @classmethod
     async def get_collection(cls, collection_name: str):

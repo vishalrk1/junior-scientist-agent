@@ -49,19 +49,19 @@ const UploadPDFButton: React.FC<UploadPDFButtonProps> = ({ className }) => {
 
   const handleSubmit = async () => {
     try {
-        setIsOpen(false);
-        if (user && files.length > 0) {
-            const session = await createSession(
-            user?.id,
-            apiKey,
-            `Document Analysis Session ${new Date().toLocaleString()}`,
-            "Created from document upload"
-            );
-            await uploadFiles(session.id, files);
-        } else {
-            setIsOpen(true);
-            throw new Error("User not authenticated or no files to upload");
-        }
+      setIsOpen(false);
+      if (user && files.length > 0) {
+        const session = await createSession(
+          user?.id,
+          apiKey,
+          `Document Analysis Session ${new Date().toLocaleString()}`,
+          "Created from document upload"
+        );
+        await uploadFiles(session.id, files);
+      } else {
+        setIsOpen(true);
+        throw new Error("User not authenticated or no files to upload");
+      }
     } catch (error) {
       console.error("Error during upload process:", error);
     }
@@ -73,7 +73,7 @@ const UploadPDFButton: React.FC<UploadPDFButtonProps> = ({ className }) => {
         <Button
           type="button"
           className={cn(
-            "flex items-center gap-2 px-4 py-2 m-2",
+            "flex items-center gap-2 px-4 py-2",
             "hover:bg-slate-100 dark:hover:bg-slate-800",
             "transition-colors duration-200",
             className

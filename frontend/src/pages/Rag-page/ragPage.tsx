@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -17,14 +18,42 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Loader2, Send } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import RagSessionList from "@/components/sidebar/rag/rag-list";
 
 const RagPage = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const { files } = useFiles();
-  const { currentSession, isCreatingSession, isUploadingFiles } =
-    useRagSession();
-  const { addUserMessage, addAiMessage, isLoading, error } = useRagMessages();
+  const {
+    currentSession,
+    isUploadingFiles,
+    fetchSession,
+    fetchSessions,
+    isLoading: isSessionLoading,
+  } = useRagSession();
+  const {
+    addUserMessage,
+    addAiMessage,
+    isLoading: isMessageLoading,
+    error,
+  } = useRagMessages();
   const [message, setMessage] = useState("");
   const [inputError, setInputError] = useState("");
+
+  useEffect(() => {
+    const sessionId = location.hash.slice(1);
+    if (sessionId) {
+      fetchSession(sessionId).catch(() => {
+        navigate("/rag");
+      });
+    } else {
+      navigate("/rag");
+    }
+  }, [location.hash]);
+
+  useEffect(() => {
+    fetchSessions();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +62,6 @@ const RagPage = () => {
       setInputError("Please enter a message");
       return;
     }
-
     if (!currentSession?.id) {
       setInputError("No active session");
       return;
@@ -52,22 +80,34 @@ const RagPage = () => {
 
   const steps = [
     {
-      label: "Creating Session",
-      status: isCreatingSession
-        ? "loading"
-        : isUploadingFiles || currentSession
-        ? "completed"
-        : "pending",
-    },
-    {
-      label: "Uploading Files",
-      status: isUploadingFiles
+      label: "Loading Session",
+      status: isSessionLoading
         ? "loading"
         : currentSession
         ? "completed"
         : "pending",
     },
+    {
+      label: "Processing Files",
+      status: isUploadingFiles
+        ? "loading"
+        : currentSession?.documents?.length
+        ? "completed"
+        : "pending",
+    },
   ] as const;
+
+  if (isSessionLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!currentSession) {
+    return null;
+  }
 
   return (
     <div className="flex flex-col h-screen">
@@ -78,7 +118,7 @@ const RagPage = () => {
           <BreadcrumbList>
             <BreadcrumbItem>
               <BreadcrumbPage className="line-clamp-1 text-lg font-semibold">
-                RAG Assistant
+                {currentSession?.title || "RAG Assistant"}
               </BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
@@ -119,7 +159,6 @@ const RagPage = () => {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
-
           <RagChatHistory />
         </div>
 
@@ -131,7 +170,7 @@ const RagPage = () => {
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Type your message here..."
                 className="border-none outline-none focus:outline-none focus:border-none focus-visible:ring-0 shadow-none h-14 text-lg rounded-none"
-                disabled={isLoading || !currentSession}
+                disabled={isMessageLoading || !currentSession}
               />
               {inputError && (
                 <p className="text-sm text-destructive mt-1">{inputError}</p>
@@ -139,10 +178,10 @@ const RagPage = () => {
             </div>
             <Button
               type="submit"
-              disabled={isLoading || !currentSession || !message.trim()}
+              disabled={isMessageLoading || !currentSession || !message.trim()}
               className="h-14 px-6"
             >
-              {isLoading ? (
+              {isMessageLoading ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
                 <Send className="h-5 w-5" />

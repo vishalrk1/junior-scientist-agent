@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Dashboard from '@/pages/Dashboard/dashboard'
-import RagPage from '@/pages/Dashboard/ragPage'
+import RagPage from '@/pages/Rag-page/ragPage'
 import MainLayout from '@/layouts/MainLayout'
 
 const AppRoutes = () => {

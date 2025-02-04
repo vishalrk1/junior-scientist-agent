@@ -11,8 +11,8 @@ import useProjects from "@/hooks/useProjects";
 import useAuthStore from "@/hooks/useAuthStore";
 import useNavStore, { navItems } from "@/store/useNavStore";
 import { IconSidebar } from "./icon-sidebar";
-import RagSidebar from "./rag-sidebar";
 import ProjectSidebar from "./project-sidebar";
+import RagSidebar from "./rag/rag-sidebar";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation();

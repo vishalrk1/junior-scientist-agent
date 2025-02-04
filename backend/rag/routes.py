@@ -108,8 +108,28 @@ async def upload_files(
 @router.get("/history")
 async def get_chat_history(user = Depends(get_current_user)):
     collection = await Database.get_collection("rag_sessions")
-    sessions = await collection.find({"user_id": str(user["_id"])})
-    return [RagSession.parse_obj(session).to_response() for session in sessions]
+    cursor = collection.find({"user_id": str(user["_id"])})
+    sessions = []
+    async for session in cursor:
+        sessions.append(RagSession.parse_obj(session).to_response())
+    return sessions
+
+@router.get("/session/{session_id}", response_model=RagSessionResonse)
+async def get_session(
+    session_id: str,
+    user = Depends(get_current_user)
+):
+    collection = await Database.get_collection("rag_sessions")
+    session_doc = await collection.find_one({
+        "_id": ObjectId(session_id), 
+        "user_id": str(user["_id"])
+    })
+    
+    if not session_doc:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    session = RagSession.parse_obj(session_doc)
+    return session.to_response()
 
 @router.post("/{session_id}/chat")
 async def chat(

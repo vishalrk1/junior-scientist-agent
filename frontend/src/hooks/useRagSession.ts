@@ -1,16 +1,26 @@
 import { RagSession } from "@/lib/types";
 import { create } from "zustand";
+import { useNavigate } from "react-router-dom";
 
 interface RagSessionState {
   currentSession: RagSession | null;
   isCreatingSession: boolean;
   isUploadingFiles: boolean;
   error: string | null;
+  sessions: RagSession[];
+  isLoading: boolean;
 
-  createSession: (userId: string, title: string, openai_api_key: string, description?: string) => Promise<RagSession>;
+  createSession: (
+    userId: string,
+    title: string,
+    openai_api_key: string,
+    description?: string
+  ) => Promise<RagSession>;
   uploadFiles: (sessionId: string, files: File[]) => Promise<void>;
   getCurrentSession: () => RagSession | null;
   clearCurrentSession: () => void;
+  fetchSessions: () => Promise<void>;
+  fetchSession: (sessionId: string) => Promise<void>;
 }
 
 const useRagSessionStore = create<RagSessionState>((set, get) => ({
@@ -18,8 +28,69 @@ const useRagSessionStore = create<RagSessionState>((set, get) => ({
   isCreatingSession: false,
   isUploadingFiles: false,
   error: null,
+  sessions: [],
+  isLoading: false,
 
-  createSession: async (userId: string, openai_api_key: string, title: string, description?: string) => {
+  fetchSessions: async () => {
+    set({ isLoading: true, error: null });
+    const token = localStorage.getItem("auth-token");
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_BASE_API_URL}rag/history`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to fetch sessions");
+
+      const sessions = await response.json();
+      set({ sessions, isLoading: false });
+    } catch (error) {
+      set({ error: "Failed to fetch sessions", isLoading: false });
+      throw error;
+    }
+  },
+
+  fetchSession: async (sessionId: string) => {
+    set({ isLoading: true, error: null });
+    const token = localStorage.getItem("auth-token");
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_BASE_API_URL}rag/session/${sessionId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to fetch session");
+
+      const session = await response.json();
+      set({
+        currentSession: session,
+        isLoading: false,
+        error: null,
+      });
+    } catch (error) {
+      set({
+        error: "Failed to fetch session",
+        isLoading: false,
+        currentSession: null,
+      });
+      throw error;
+    }
+  },
+
+  createSession: async (
+    userId: string,
+    openai_api_key: string,
+    title: string,
+    description?: string
+  ) => {
     set({ isCreatingSession: true, error: null });
     const token = localStorage.getItem("auth-token");
     try {
@@ -43,7 +114,11 @@ const useRagSessionStore = create<RagSessionState>((set, get) => ({
       if (!response.ok) throw new Error("Failed to create session");
 
       const session = await response.json();
-      set({ currentSession: session, isCreatingSession: false });
+      set((state) => ({
+        currentSession: session,
+        isCreatingSession: false,
+        sessions: [...state.sessions, session],
+      }));
       return session;
     } catch (error) {
       set({ error: "Failed to create session", isCreatingSession: false });
@@ -95,26 +170,28 @@ const useRagSessionStore = create<RagSessionState>((set, get) => ({
 }));
 
 const useRagSession = () => {
-  const {
-    currentSession,
-    isCreatingSession,
-    isUploadingFiles,
-    error,
-    createSession,
-    uploadFiles,
-    getCurrentSession,
-    clearCurrentSession,
-  } = useRagSessionStore();
+  const navigate = useNavigate();
+  const state = useRagSessionStore();
+
+  const createAndNavigate = async (
+    userId: string,
+    openai_api_key: string,
+    title: string,
+    description?: string
+  ) => {
+    const session = await state.createSession(
+      userId,
+      openai_api_key,
+      title,
+      description
+    );
+    navigate(`/rag#${session.id}`);
+    return session;
+  };
 
   return {
-    currentSession,
-    isCreatingSession,
-    isUploadingFiles,
-    error,
-    createSession,
-    uploadFiles,
-    getCurrentSession,
-    clearCurrentSession,
+    ...state,
+    createSession: createAndNavigate,
   };
 };
 
