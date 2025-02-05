@@ -18,12 +18,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Loader2, Send } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import RagSessionList from "@/components/sidebar/rag/rag-list";
 
 const RagPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { files } = useFiles();
+  const { fileNames } = useFiles();
   const {
     currentSession,
     isUploadingFiles,
@@ -132,8 +131,8 @@ const RagPage = () => {
             <div className="flex gap-8">
               <div className="flex-1">
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {files &&
-                    files.map((file, index) => (
+                  {fileNames &&
+                    fileNames.map((title, index) => (
                       <div
                         key={index}
                         className="flex flex-col items-center p-4 border rounded-lg hover:shadow-md transition-shadow bg-white dark:bg-gray-800"
@@ -142,7 +141,7 @@ const RagPage = () => {
                           <FileText className="w-12 h-12 text-blue-500" />
                         </div>
                         <span className="text-sm text-center break-words w-full">
-                          {file.name}
+                          {title}
                         </span>
                       </div>
                     ))}

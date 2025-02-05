@@ -2,6 +2,7 @@ import { RagSession } from "@/lib/types";
 import { create } from "zustand";
 import { useNavigate } from "react-router-dom";
 import useRagMessages from "./useRagMessages";
+import useFiles from "./useFiles";
 
 interface RagSessionState {
   currentSession: RagSession | null;
@@ -58,8 +59,8 @@ const useRagSessionStore = create<RagSessionState>((set, get) => ({
   fetchSession: async (sessionId: string) => {
     set({ isLoading: true, error: null });
     const token = localStorage.getItem("auth-token");
-    const ragMessages = useRagMessages.getState()
-
+    const ragMessages = useRagMessages.getState();
+    console.log(token);
     try {
       const response = await fetch(
         `${import.meta.env.VITE_BASE_API_URL}rag/session/${sessionId}`,
@@ -72,13 +73,16 @@ const useRagSessionStore = create<RagSessionState>((set, get) => ({
 
       if (!response.ok) throw new Error("Failed to fetch session");
 
-      const session = await response.json();
+      const session: RagSession = await response.json();
       set({
         currentSession: session,
         isLoading: false,
         error: null,
       });
-      ragMessages.messages = session.messages
+      ragMessages.messages = session.messages;
+      if (session?.documents && session.documents.length > 0) {
+        useFiles.getState().fileNames = session?.documents;
+      }
     } catch (error) {
       set({
         error: "Failed to fetch session",

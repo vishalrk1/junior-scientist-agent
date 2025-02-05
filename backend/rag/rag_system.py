@@ -10,11 +10,27 @@ from typing import List, Dict, Optional
 from rag.IVFPQVectorDB import IVFPQVectorDB
 from rag.doc_processor import DocumentProcessor
 
+import logging
+from typing import List, Dict, Optional
+from dataclasses import dataclass
+from enum import Enum
+
+class QueryType(Enum):
+    CONTEXT = "context"
+    DETAIL = "detail"
+    VERIFICATION = "verification"
+
+@dataclass
+class SubQuery:
+    text: str
+    query_type: QueryType
+    importance: int
+
 class RagSystem:
     def __init__(self, api_key=None, session_id=None):
         self.client = OpenAI(api_key=api_key)
         self.session_id = session_id
-        self.doc_processor = DocumentProcessor(chunk_size=1000, chunk_overlap=100)
+        self.doc_processor = DocumentProcessor(chunk_size=500, chunk_overlap=100)
         self.vector_db = IVFPQVectorDB(
             api_key=api_key, 
             db_path=f'data/rag_sessions/{session_id}/vector_db.pkl'
@@ -22,6 +38,7 @@ class RagSystem:
         self.memory = []
         self.chunks = []
         self.temperature = 0.7
+        self.logger = logging.getLogger(__name__)
     
     def get_embeddings(self, text: str) -> List[float]:
         response = self.client.embeddings.create(
@@ -98,6 +115,7 @@ class RagSystem:
         if self.memory:
             last_exchanges = self.memory[-2:]
             prompt += f"\n\nLast Exchanges:\n{last_exchanges[0]['content']}\n{last_exchanges[1]['content']}"
+
         messages = [
             {"role": "system", "content": prompt},
             {"role": "user", "content": question}
@@ -115,26 +133,124 @@ class RagSystem:
             return match.group(1)
         return question
     
+    def _get_relevant_questions(self, question: str) -> List[SubQuery]:
+        prompt = """
+        You are an expert at breaking down complex questions for RAG systems. Generate comprehensive subqueries that will help gather all necessary information from the document collection.
+
+        For the given question, generate at least 3 types of subqueries:
+        1. CONTEXT: Broader background information needed to understand the topic
+        2. DETAIL: Specific facts, figures, or data points
+        3. VERIFICATION: Cross-reference information or verify claims
+
+        Requirements:
+        - Each subquery must be focused and specific
+        - Subqueries should cover different aspects of the question
+        - Include importance level (5=highest, 1=lowest)
+        - Ensure subqueries are actually answerable from documents
+
+        Format your response exactly as:
+        <subqueries>
+        type: [context/detail/verification]
+        importance: [1-5]
+        query: [your subquery here]
+        ---
+        [repeat for each subquery]
+        </subqueries>
+        """
+        
+        messages = [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"Question: {question}"}
+        ]
+
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                temperature=0.2,
+                max_tokens=500
+            )
+            
+            return self._parse_subqueries(response.choices[0].message.content.strip())
+            
+        except Exception as e:
+            self.logger.error(f"Error generating subqueries: {str(e)}")
+            return [SubQuery(text=question, query_type=QueryType.DETAIL, importance=5)]
+
+    def _parse_subqueries(self, content: str) -> List[SubQuery]:
+        subqueries = []
+        
+        match = re.search(r'<subqueries>(.*?)</subqueries>', content, re.DOTALL)
+        if not match:
+            return []
+            
+        blocks = match.group(1).split('---')
+        
+        for block in blocks:
+            if not block.strip():
+                continue
+                
+            try:
+                type_match = re.search(r'type:\s*(context|detail|verification)', block, re.IGNORECASE)
+                importance_match = re.search(r'importance:\s*([1-5])', block)
+                query_match = re.search(r'query:\s*(.+?)(?=\n|$)', block, re.DOTALL)
+                
+                if all([type_match, importance_match, query_match]):
+                    subqueries.append(SubQuery(
+                        text=query_match.group(1).strip(),
+                        query_type=QueryType[type_match.group(1).upper()],
+                        importance=int(importance_match.group(1))
+                    ))
+            except Exception as e:
+                self.logger.error(f"Error parsing subquery block: {str(e)}")
+                continue
+                
+        return subqueries if subqueries else []
+
     def chat(self, question: str, temperature: Optional[float] = None) -> Dict:
         try:
             updated_question = self._update_query(question)
-            relevant_docs = self.vector_db.search(updated_question, k=4, similarity_threshold=0.3)
-            if not relevant_docs:
+            subqueries = self._get_relevant_questions(updated_question)
+            
+            subqueries.sort(key=lambda x: x.importance, reverse=True)
+            
+            self.logger.info("Generated subqueries:")
+            all_relevant_docs = []
+            query_results = {}
+            
+            for sq in subqueries:
+                self.logger.info(f"Processing {sq.query_type.value} query: {sq.text}")
+                docs = self.vector_db.search(sq.text, k=2, similarity_threshold=0.3)
+                if docs:
+                    query_results[sq.text] = docs
+                    all_relevant_docs.extend(docs)
+
+            if not all_relevant_docs:
                 return {
                     "answer": "I couldn't find any relevant information to answer your question.",
                     "sources": []
                 }
+            
+            seen_contents = set()
+            unique_docs = []
+            for doc in all_relevant_docs:
+                content = doc['metadata']['content']
+                if content not in seen_contents:
+                    seen_contents.add(content)
+                    unique_docs.append(doc)
 
-            context = self._format_context(relevant_docs)
+            context = self._format_context(unique_docs)
+            
+            # Include subquery results in system message
+            system_message = self._get_system_prompt() + "\n\nQuery Analysis:\n"
+            for sq in subqueries:
+                system_message += f"\n{sq.query_type.value.title()} Query: {sq.text}"
+
             messages = [
-                {"role": "system", "content": self._get_system_prompt()},
+                {"role": "system", "content": system_message},
                 {"role": "system", "content": context},
                 {"role": "user", "content": question}
             ]
-
-            if self.memory:
-                last_exchanges = self.memory[-2:]
-                messages[1:1] = last_exchanges
 
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -148,18 +264,19 @@ class RagSystem:
                 {"role": "user", "content": question},
                 {"role": "assistant", "content": answer}
             ])
+
             return {
                 "answer": answer,
                 "sources": [{
                     "title": doc['metadata']["title"],
                     "similarity": doc['similarity']
-                } for doc in relevant_docs]
+                } for doc in unique_docs]
             }
 
         except Exception as e:
-            logging.error(f"Error in chat: {str(e)}")
+            self.logger.error(f"Error in chat: {str(e)}")
             raise RuntimeError(f"Failed to generate response: {str(e)}")
-
+        
     def clear_memory(self):
         self.memory = []
 

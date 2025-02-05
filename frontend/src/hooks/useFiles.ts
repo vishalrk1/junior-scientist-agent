@@ -3,6 +3,7 @@ import useRagSession from "./useRagSession";
 
 export interface FileState {
   files: File[];
+  fileNames: string[];
   maxFiles: number;
   isUploading: boolean;
   addFiles: (newFiles: File[]) => void;
@@ -19,24 +20,31 @@ const MAX_FILES = 5;
 
 const useFiles = create<FileState>((set, get) => ({
   files: [],
+  fileNames: [],
   maxFiles: MAX_FILES,
   isUploading: false,
   currentSessionId: null,
 
   addFiles: (newFiles) => {
-    set((state) => ({
-      files: [...state.files, ...newFiles].slice(0, state.maxFiles),
-    }));
+    set((state) => {
+      const combinedFiles = [...state.files, ...newFiles].slice(0, state.maxFiles);
+      const combinedNames = [...state.fileNames, ...newFiles.map(file => file.name)].slice(0, state.maxFiles);
+      return {
+        files: combinedFiles,
+        fileNames: combinedNames,
+      };
+    });
   },
 
   removeFile: (index) => {
     set((state) => ({
       files: state.files.filter((_, i) => i !== index),
+      fileNames: state.fileNames.filter((_, i) => i !== index),
     }));
   },
 
   clearFiles: () => {
-    set({ files: [] });
+    set({ files: [], fileNames: [] });
   },
 
   setIsUploading: (status) => {
