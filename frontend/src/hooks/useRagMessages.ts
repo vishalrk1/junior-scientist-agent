@@ -1,20 +1,25 @@
 import { ChatMessage } from "@/lib/types";
 import { create } from "zustand";
+import { WebSocketService } from "@/services/websocket";
 
 interface RagMessagesState {
   messages: ChatMessage[];
   error: string | null;
   isLoading: boolean;
+  websocket: WebSocketService | null;
 
   addUserMessage: (message: string) => void;
   addAiMessage: (message: string, session_id: string) => Promise<void>;
   clearMessages: () => void;
+  initializeWebSocket: (sessionId: string) => void;
+  cleanup: () => void;
 }
 
 const useRagMessages = create<RagMessagesState>((set, get) => ({
   messages: [],
   error: null,
   isLoading: false,
+  websocket: null,
 
   addUserMessage: (message: string) => {
     set((state) => ({
@@ -30,45 +35,48 @@ const useRagMessages = create<RagMessagesState>((set, get) => ({
   },
 
   addAiMessage: async (message: string, session_id: string) => {
-    set({ isLoading: true, error: null });
-    const token = localStorage.getItem("auth-token");
-    try {
-      const response = await fetch(
-        `${import.meta.env.VITE_BASE_API_URL}rag/${session_id}/chat`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            message,
-          }),
-        }
-      );
-
-      if (!response.ok) throw Error("Failed to get answer");
-      const res = await response.json();
-
-      set((state) => ({
-        messages: [
-          ...state.messages,
-          {
-            role: "ai",
-            content: res?.message ? res?.message : "No response",
-            source: res?.sources ? res?.sources : [],
-            timestamp: new Date(),
-          },
-        ],
-        isLoading: false,
-      }));
-    } catch (error: any) {
-      set({ error: error.message, isLoading: false });
+    const { websocket } = get();
+    if (websocket) {
+      set({ isLoading: true, error: null });
+      websocket.sendMessage(message);
     }
   },
 
   clearMessages: () => {
     set({ messages: [] });
+  },
+
+  initializeWebSocket: (sessionId: string) => {
+    const ws = new WebSocketService(sessionId);
+    
+    // Clear existing messages before initializing new connection
+    set({ messages: [] });
+
+    ws.addMessageHandler((data) => {
+      console.log('WebSocket message received:', data);  // Debug log
+      
+      if (data.type === "message" || data.type === "initialize") {
+        set((state) => ({
+          messages: [...state.messages, data.content],
+          isLoading: false,
+        }));
+      } else if (data.type === "loading") {
+        set({ isLoading: data.content.is_loading });
+      } else if (data.type === "error") {
+        set({ error: data.content, isLoading: false });
+      }
+    });
+
+    ws.connect();
+    set({ websocket: ws, error: null });
+  },
+
+  cleanup: () => {
+    const { websocket } = get();
+    if (websocket) {
+      websocket.disconnect();
+      set({ websocket: null, messages: [], isLoading: false, error: null });
+    }
   },
 }));
 

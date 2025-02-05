@@ -7,7 +7,7 @@ import ReactMarkdown from "react-markdown";
 
 const RagChatHistory = () => {
   const { currentSession } = useRagSession();
-  const { messages } = useRagMessages();
+  const { messages, isLoading } = useRagMessages();
   const [expandedSources, setExpandedSources] = React.useState<number[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -89,6 +89,19 @@ const RagChatHistory = () => {
             </div>
           </div>
         ))}
+        
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className="max-w-[80%] rounded-lg p-4 dark:bg-card bg-muted shadow-sm">
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce" />
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:0.2s]" />
+                <div className="w-2 h-2 bg-primary rounded-full animate-bounce [animation-delay:0.4s]" />
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div ref={messagesEndRef} />
       </div>
     </div>

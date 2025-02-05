@@ -35,6 +35,8 @@ const RagPage = () => {
     addAiMessage,
     isLoading: isMessageLoading,
     error,
+    initializeWebSocket,
+    cleanup,
   } = useRagMessages();
   const [message, setMessage] = useState("");
   const [inputError, setInputError] = useState("");
@@ -42,12 +44,23 @@ const RagPage = () => {
   useEffect(() => {
     const sessionId = location.hash.slice(1);
     if (sessionId) {
-      fetchSession(sessionId).catch(() => {
-        navigate("/rag");
-      });
+      fetchSession(sessionId)
+        .then(() => {
+          // Only initialize WebSocket if documents are already uploaded
+          if (currentSession?.documents?.length) {
+            initializeWebSocket(sessionId);
+          }
+        })
+        .catch(() => {
+          navigate("/rag");
+        });
     } else {
       navigate("/rag");
     }
+
+    return () => {
+      cleanup();
+    };
   }, [location.hash]);
 
   useEffect(() => {

@@ -137,6 +137,8 @@ const useRagSessionStore = create<RagSessionState>((set, get) => ({
   uploadFiles: async (sessionId: string, files: File[]) => {
     set({ isUploadingFiles: true, error: null });
     const token = localStorage.getItem("auth-token");
+    const ragMessages = useRagMessages.getState();
+    
     try {
       const formData = new FormData();
       files.forEach((file) => formData.append("files", file));
@@ -167,6 +169,9 @@ const useRagSessionStore = create<RagSessionState>((set, get) => ({
           : null,
         isUploadingFiles: false,
       }));
+
+      // Initialize WebSocket connection after successful upload
+      ragMessages.initializeWebSocket(sessionId);
     } catch (error) {
       set({ error: "Failed to upload files", isUploadingFiles: false });
       throw error;
