@@ -46,7 +46,7 @@ const RagSessionList: React.FC<RagSessionListProps> = ({
         >
           <div className="flex w-full items-center gap-2">
             <span className="font-semibold min-w-0 flex-1 truncate">
-              Rag Title
+              {rag?.title}
             </span>
             <span className="ml-auto text-xs shrink-0">
               {formatDate(rag.created_at)}

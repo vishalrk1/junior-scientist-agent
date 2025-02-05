@@ -1,17 +1,15 @@
-import os
 from datetime import datetime
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Body
 from typing import List
 from bson import ObjectId
-from io import BytesIO
 
 from models.rag import RagSession, ChatMessage, Source, RagSessionResonse
 from rag.rag_system import RagSystem
 from auth.dependencies import get_current_user
 from database import Database
+from session_store import RAG_SESSIONS
 
 router = APIRouter()
-RAG_SESSIONS = {}  # In-memory store of active RAG systems
 
 @router.post("/session", response_model=RagSessionResonse)
 async def create_session(
@@ -19,28 +17,13 @@ async def create_session(
     user = Depends(get_current_user)
 ): 
     try:
-        initial_messages = [
-            ChatMessage(
-                role="ai",
-                content="👋 Hello! I'm your Document Analysis Assistant.",
-                timestamp=datetime.utcnow(),
-                source=[]
-            ),
-            ChatMessage(
-                role="ai",
-                content="I have gone through your documents and I'm ready to help you with any questions you have.",
-                timestamp=datetime.utcnow(),
-                source=[]
-            )
-        ]
-        
         session_dict = {
             "user_id": data.user_id,
             "api_key": data.api_key,
             "title": data.title,
             "description": data.description,
             "documents": [],
-            "messages": [msg.dict() for msg in initial_messages],
+            "messages": [],
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow(),
             "settings": data.settings
@@ -112,7 +95,7 @@ async def get_chat_history(user = Depends(get_current_user)):
     sessions = []
     async for session in cursor:
         sessions.append(RagSession.parse_obj(session).to_response())
-    return sessions
+    return sessions[::-1]
 
 @router.get("/session/{session_id}", response_model=RagSessionResonse)
 async def get_session(

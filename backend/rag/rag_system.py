@@ -1,4 +1,5 @@
 import os 
+import re
 import json
 import tempfile
 import logging
@@ -13,14 +14,13 @@ class RagSystem:
     def __init__(self, api_key=None, session_id=None):
         self.client = OpenAI(api_key=api_key)
         self.session_id = session_id
-        self.doc_processor = DocumentProcessor(chunk_size=500, chunk_overlap=50)
+        self.doc_processor = DocumentProcessor(chunk_size=1000, chunk_overlap=100)
         self.vector_db = IVFPQVectorDB(
             api_key=api_key, 
             db_path=f'data/rag_sessions/{session_id}/vector_db.pkl'
         )
         self.memory = []
         self.chunks = []
-        self.max_context_length = 4000
         self.temperature = 0.7
     
     def get_embeddings(self, text: str) -> List[float]:
@@ -64,11 +64,61 @@ class RagSystem:
         1. Answer questions based on the provided context, strictly dont use information out of this documents
         2. If the answer cannot be found in the context, say so
         3. Provide clear and concise answers
-        5. Cite specific documents when possible"""
+        5. Do not Cite specific documents in your response
+        6. If Information is not available, say so and tell user you cant answer this question"""
 
+    def _update_query(self, question: str) -> str:
+        prompt = """
+        You are an advanced AI assistant specialized in query processing and contextual understanding. Process each query through these steps:
+        ## Query Analysis and Enhancement
+        ### Analysis Steps:
+        1. SCAN CONVERSATION HISTORY
+        - Previous questions and their topics
+        - Established context and key information
+        - Ongoing discussion themes
+
+        2. IDENTIFY CONTEXTUAL ELEMENTS
+        - Pronouns (it, they, this, that)
+        - Implicit references to previous topics
+        - Time-based references
+        - Location mentions
+        - Subject continuity markers
+
+        3. QUERY RECONSTRUCTION
+        - Replace pronouns with specific references
+        - Add missing context from previous exchanges
+        - Keep critical keywords intact
+        - Maintain technical precision
+        - Create concise, self-contained question
+        
+        Finally respond with update query only in following format:
+        `<query>{updated query}</query>`
+        """
+        
+        if self.memory:
+            last_exchanges = self.memory[-2:]
+            prompt += f"\n\nLast Exchanges:\n{last_exchanges[0]['content']}\n{last_exchanges[1]['content']}"
+        messages = [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": question}
+        ]
+        
+        response = self.client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            temperature=0.2,
+            max_tokens=300
+        )
+        
+        match = re.search(r'<query>(.*?)</query>', response.choices[0].message.content.strip())
+        if match:
+            return match.group(1)
+        return question
+    
     def chat(self, question: str, temperature: Optional[float] = None) -> Dict:
         try:
-            relevant_docs = self.vector_db.search(question, k=4, similarity_threshold=0.2)
+            updated_question = self._update_query(question)
+            relevant_docs = self.vector_db.search(updated_question, k=4, similarity_threshold=0.3)
             if not relevant_docs:
                 return {
                     "answer": "I couldn't find any relevant information to answer your question.",

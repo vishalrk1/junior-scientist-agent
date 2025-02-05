@@ -34,8 +34,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     except jwt.InvalidTokenError:
         raise credentials_exception
 
-    users_collection = Database.get_users_collection()
+    users_collection = await Database.get_collection("users")  # Changed this line
     user = await users_collection.find_one({"email": email})
     if user is None:
         raise credentials_exception
+    user["_id"] = str(user["_id"])  # Convert ObjectId to string
     return user

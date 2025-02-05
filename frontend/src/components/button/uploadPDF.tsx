@@ -26,6 +26,8 @@ interface UploadPDFButtonProps {
 const UploadPDFButton: React.FC<UploadPDFButtonProps> = ({ className }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [apiKey, setApiKey] = useState("");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const { user } = useAuthStore();
   const { files, maxFiles, addFiles, removeFile } = useFiles();
 
@@ -54,8 +56,8 @@ const UploadPDFButton: React.FC<UploadPDFButtonProps> = ({ className }) => {
         const session = await createSession(
           user?.id,
           apiKey,
-          `Document Analysis Session ${new Date().toLocaleString()}`,
-          "Created from document upload"
+          title || `Document Analysis Session ${new Date().toLocaleString()}`,
+          description
         );
         await uploadFiles(session.id, files);
       } else {
@@ -96,6 +98,41 @@ const UploadPDFButton: React.FC<UploadPDFButtonProps> = ({ className }) => {
         </DialogHeader>
 
         <Separator className="my-0 py-0" />
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <Label
+              htmlFor="title"
+              className="text-sm font-medium flex items-center"
+            >
+              Title<span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Enter session title"
+              className="w-full"
+              required
+            />
+          </div>
+          <div className="space-y-1">
+            <Label
+              htmlFor="description"
+              className="text-sm font-medium flex items-center"
+            >
+              Description
+            </Label>
+            <Input
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Enter session description"
+              className="w-full"
+            />
+          </div>
+        </div>
+
         <div className="space-y-1">
           <Label
             htmlFor="api-key"
