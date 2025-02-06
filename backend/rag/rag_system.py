@@ -7,7 +7,7 @@ from io import BytesIO
 from openai import OpenAI
 from typing import List, Dict, Optional
 
-from rag.IVFPQVectorDB import IVFPQVectorDB
+from rag.similarity_matching import SimilarityMatching, Config
 from rag.doc_processor import DocumentProcessor
 
 import logging
@@ -31,7 +31,7 @@ class RagSystem:
         self.client = OpenAI(api_key=api_key)
         self.session_id = session_id
         self.doc_processor = DocumentProcessor(chunk_size=500, chunk_overlap=100)
-        self.vector_db = IVFPQVectorDB(
+        self.vector_db = SimilarityMatching(
             api_key=api_key, 
             db_path=f'data/rag_sessions/{session_id}/vector_db.pkl'
         )
@@ -61,14 +61,8 @@ class RagSystem:
         return len(chunks)
     
     def _load_vector_store(self):
-        os.makedirs(f'data/rag_sessions/{self.session_id}', exist_ok=True)
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
-                json.dump(self.chunks, f)
-                temp_path = f.name
-                
-        self.vector_db.load_data(temp_path)
+        self.vector_db.load_data(self.chunks)
         self.vector_db.save_db()
-        os.unlink(temp_path)
     
     def _format_context(self, relevant_docs: List[Dict]) -> str:
         context = "\n\nRelevant Information:\n"
@@ -143,18 +137,24 @@ class RagSystem:
         3. VERIFICATION: Cross-reference information or verify claims
 
         Requirements:
-        - Each subquery must be focused and specific
-        - Subqueries should cover different aspects of the question
+        - Each subquery must be focused and specific to the question
+        - Subqueries should cover different aspects of the question in few words
         - Include importance level (5=highest, 1=lowest)
         - Ensure subqueries are actually answerable from documents
 
-        Format your response exactly as:
+        Format your response EXACTLY as follows:
         <subqueries>
-        type: [context/detail/verification]
-        importance: [1-5]
-        query: [your subquery here]
+        type: context
+        importance: 5
+        query: your subquery here
         ---
-        [repeat for each subquery]
+        type: detail
+        importance: 4
+        query: your subquery here
+        ---
+        type: verification
+        importance: 3
+        query: your subquery here
         </subqueries>
         """
         
@@ -179,33 +179,35 @@ class RagSystem:
 
     def _parse_subqueries(self, content: str) -> List[SubQuery]:
         subqueries = []
-        
         match = re.search(r'<subqueries>(.*?)</subqueries>', content, re.DOTALL)
         if not match:
+            self.logger.error(f"No subqueries found in content: {content}")
             return []
             
-        blocks = match.group(1).split('---')
-        
+        blocks = [b.strip() for b in match.group(1).split('---') if b.strip()]
         for block in blocks:
-            if not block.strip():
-                continue
-                
             try:
                 type_match = re.search(r'type:\s*(context|detail|verification)', block, re.IGNORECASE)
                 importance_match = re.search(r'importance:\s*([1-5])', block)
-                query_match = re.search(r'query:\s*(.+?)(?=\n|$)', block, re.DOTALL)
+                query_match = re.search(r'query:\s*([^\n]+)', block)
                 
                 if all([type_match, importance_match, query_match]):
+                    query_type = type_match.group(1).upper()
                     subqueries.append(SubQuery(
                         text=query_match.group(1).strip(),
-                        query_type=QueryType[type_match.group(1).upper()],
+                        query_type=QueryType[query_type],
                         importance=int(importance_match.group(1))
                     ))
+                else:
+                    self.logger.warning(f"Incomplete subquery block: {block}")
             except Exception as e:
-                self.logger.error(f"Error parsing subquery block: {str(e)}")
+                self.logger.error(f"Error parsing subquery block '{block}': {str(e)}")
                 continue
                 
-        return subqueries if subqueries else []
+        if not subqueries:
+            self.logger.warning("No valid subqueries were parsed")
+            
+        return subqueries
 
     def chat(self, question: str, temperature: Optional[float] = None) -> Dict:
         try:
@@ -217,13 +219,22 @@ class RagSystem:
             self.logger.info("Generated subqueries:")
             all_relevant_docs = []
             query_results = {}
+
+            search_config = Config(
+                use_semantic=True,
+                use_keyword=True,
+                use_knowledge_graph=True,
+                semantic_weight=0.3,
+                keyword_weight=0.4,
+                knowledge_graph_weight=0.3
+            )
             
             for sq in subqueries:
-                self.logger.info(f"Processing {sq.query_type.value} query: {sq.text}")
-                docs = self.vector_db.search(sq.text, k=2, similarity_threshold=0.3)
+                docs = self.vector_db.search(sq.text, search_config, k=2)
                 if docs:
                     query_results[sq.text] = docs
                     all_relevant_docs.extend(docs)
+                self.logger.info(f" >>> query: {sq.text}\t docs: {len(docs)}")
 
             if not all_relevant_docs:
                 return {
@@ -240,8 +251,6 @@ class RagSystem:
                     unique_docs.append(doc)
 
             context = self._format_context(unique_docs)
-            
-            # Include subquery results in system message
             system_message = self._get_system_prompt() + "\n\nQuery Analysis:\n"
             for sq in subqueries:
                 system_message += f"\n{sq.query_type.value.title()} Query: {sq.text}"

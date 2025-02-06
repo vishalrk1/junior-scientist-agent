@@ -60,6 +60,10 @@ const UploadPDFButton: React.FC<UploadPDFButtonProps> = ({ className }) => {
           description
         );
         await uploadFiles(session.id, files);
+        setApiKey("");
+        setTitle("");
+        setDescription("");
+        files.forEach((_, index) => removeFile(index));
       } else {
         setIsOpen(true);
         throw new Error("User not authenticated or no files to upload");

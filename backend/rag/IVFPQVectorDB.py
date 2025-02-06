@@ -140,7 +140,7 @@ class IVFPQVectorDB:
         
         return np.vstack(reduced_vectors)
 
-    def load_data(self, data_file):
+    def load_data(self, data):
         """Load and process data into the index"""
         with self.console.status("Loading data...") as status:
             if self.index is not None and len(self.metadata) > 0:
@@ -152,8 +152,8 @@ class IVFPQVectorDB:
             #     return
             
             # Load data
-            with open(data_file, 'r') as file:
-                data = json.load(file)
+            # with open(data_file, 'r') as file:
+            #     data = json.load(file)
             
             texts = [f"{item['content'].lower()}" for item in data]
                     

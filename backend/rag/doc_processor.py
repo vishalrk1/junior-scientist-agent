@@ -57,7 +57,6 @@ class DocumentProcessor:
                 doc_chunks.append({
                     "title": f"{file.name} - Chunk {i+1}",
                     "content": chunk,
-                    "summary": f"Chunk {i+1} of document {file.name}"
                 })
             print("Processed file:", len(doc_chunks))
             return doc_chunks
