@@ -11,7 +11,7 @@ from agent.router import router as agents_router
 from rag.routes import router as rag_router
 from models.socket_message import SocketMessage
 from managers.socket_manager import SocketManager
-from session_store import RAG_SESSIONS
+from session_store import SessionStore
 from auth.dependencies import get_current_user
 
 MAX_CONNECTIONS_PER_USER = 5
@@ -72,7 +72,7 @@ async def websocket_endpoint(
         return
     
     try:
-        rag_system = RAG_SESSIONS.get(session_id)
+        rag_system = SessionStore.get_session(session_id)
         if not rag_system:
             await websocket.close(code=4000, reason="Invalid session")
             return

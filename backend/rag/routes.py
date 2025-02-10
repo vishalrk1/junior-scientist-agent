@@ -3,11 +3,12 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Body
 from typing import List
 from bson import ObjectId
 
-from models.rag import RagSession, ChatMessage, Source, RagSessionResonse
-from rag.rag_system import RagSystem
 from auth.dependencies import get_current_user
 from database import Database
-from session_store import RAG_SESSIONS
+from session_store import SessionStore
+
+from models.rag import RagSession, ChatMessage, Source, RagSessionResonse, SettingsConfig
+from rag.rag_system import RagSystem
 
 router = APIRouter()
 
@@ -17,6 +18,7 @@ async def create_session(
     user = Depends(get_current_user)
 ): 
     try:
+        settings = SettingsConfig()
         session_dict = {
             "user_id": data.user_id,
             "api_key": data.api_key,
@@ -26,20 +28,22 @@ async def create_session(
             "messages": [],
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow(),
-            "settings": data.settings
+            "settings": settings.__dict__
         }
 
         collection = await Database.get_collection("rag_sessions")
         result = await collection.insert_one(session_dict)
+        session_id = str(result.inserted_id)
+        session_dict["_id"] = session_id
         
-        session_dict["_id"] = str(result.inserted_id)
-        session = RagSession.parse_obj(session_dict)
-        
-        RAG_SESSIONS[str(session.id)] = RagSystem(
+        rag_system = RagSystem(
             api_key=data.api_key,
-            session_id=str(session.id)
+            session_id=session_id,
+            settings=settings
         )
         
+        SessionStore.set_session(session_id, rag_system)
+        session = RagSession.parse_obj(session_dict)
         return session.to_response()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create session: {str(e)}")
@@ -60,13 +64,14 @@ async def upload_files(
         raise HTTPException(status_code=404, detail="Session not found")
     session = RagSession.parse_obj(session_doc)
 
-    rag_system = RAG_SESSIONS.get(session_id)
+    rag_system = SessionStore.get_session(session_id)
     if not rag_system:
         rag_system = RagSystem(
             api_key=session.api_key,
-            session_id=session_id
+            session_id=session_id,
+            settings=session.settings
         )
-        RAG_SESSIONS[session_id] = rag_system
+        SessionStore.set_session(session_id, rag_system)
 
     try:
         processed_files = []
@@ -135,7 +140,7 @@ async def chat(
         
     session = RagSession.parse_obj(session_doc)
 
-    rag_system = RAG_SESSIONS.get(session_id)
+    rag_system = SessionStore.get_session(session_id)
     if not rag_system:
         raise HTTPException(status_code=400, detail="Session not initialized")
 
@@ -173,4 +178,50 @@ async def chat(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/{session_id}/settings", response_model=RagSessionResonse)
+async def update_settings(
+    session_id: str,
+    settings: SettingsConfig,
+    user = Depends(get_current_user)
+):
+    collection = await Database.get_collection("rag_sessions")
+    session_doc = await collection.find_one({
+        "_id": ObjectId(session_id), 
+        "user_id": str(user["_id"])
+    })
+    
+    if not session_doc:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if not settings.validate_weights():
+        raise HTTPException(
+            status_code=400, 
+            detail="Invalid settings: weights must sum to 1.0"
+        )
+    
+    try:
+        await collection.update_one(
+            {"_id": ObjectId(session_id)},
+            {
+                "$set": {
+                    "settings": settings.dict(),
+                    "updated_at": datetime.utcnow()
+                }
+            }
+        )
+        
+        rag_system = SessionStore.get_session(session_id)
+        if rag_system:
+            rag_system.update_settings(settings)
+        
+        updated_doc = await collection.find_one({"_id": ObjectId(session_id)})
+        session = RagSession.parse_obj(updated_doc)
+        return session.to_response()
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to update settings: {str(e)}"
+        )
 

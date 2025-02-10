@@ -7,27 +7,19 @@ from io import BytesIO
 from openai import OpenAI
 from typing import List, Dict, Optional
 
-from rag.similarity_matching import SimilarityMatching, Config
+from rag.similarity_matching import SimilarityMatching
 from rag.doc_processor import DocumentProcessor
+from models.rag import SettingsConfig, RagSession
+
+from models.rag import SettingsConfig, RagSession
 
 import logging
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from enum import Enum
 
-class QueryType(Enum):
-    CONTEXT = "context"
-    DETAIL = "detail"
-    VERIFICATION = "verification"
-
-@dataclass
-class SubQuery:
-    text: str
-    query_type: QueryType
-    importance: int
-
 class RagSystem:
-    def __init__(self, api_key=None, session_id=None):
+    def __init__(self, api_key=None, session_id=None, settings: Optional[SettingsConfig] = None):
         self.client = OpenAI(api_key=api_key)
         self.session_id = session_id
         self.doc_processor = DocumentProcessor(chunk_size=500, chunk_overlap=100)
@@ -37,7 +29,7 @@ class RagSystem:
         )
         self.memory = []
         self.chunks = []
-        self.temperature = 0.7
+        self.settings = settings or SettingsConfig()
         self.logger = logging.getLogger(__name__)
     
     def get_embeddings(self, text: str) -> List[float]:
@@ -72,11 +64,17 @@ class RagSystem:
 
     def _get_system_prompt(self) -> str:
         return """You are a helpful AI assistant. Your task is to:
-        1. Answer questions based on the provided context, strictly dont use information out of this documents
-        2. If the answer cannot be found in the context, say so
-        3. Provide clear and concise answers
-        5. Do not Cite specific documents in your response
-        6. If Information is not available, say so and tell user you cant answer this question"""
+        1. Use the provided context as your primary knowledge source
+        2. If the complete answer is not in the context but you can provide a partial or related answer based on the available information, do so while being transparent about limitations
+        3. Synthesize information from multiple context pieces when relevant
+        4. Provide clear, concise, and informative answers
+        5. When the context contains relevant information, use it to explain concepts without explicitly citing documents
+        6. If the question is completely unrelated to the provided context or there's no relevant information at all, politely indicate that you cannot provide an answer based on the available information
+        
+        Remember to:
+        - Be helpful and informative while staying grounded in the provided context
+        - Provide partial answers when possible, clearly indicating what aspects you can and cannot address
+        - Use natural, conversational language while maintaining accuracy"""
 
     def _update_query(self, question: str) -> str:
         prompt = """
@@ -127,37 +125,39 @@ class RagSystem:
             return match.group(1)
         return question
     
-    def _get_relevant_questions(self, question: str) -> List[SubQuery]:
+    def _get_relevant_questions(self, question: str) -> List[str]:
         prompt = """
-        You are an expert at breaking down complex questions for RAG systems. Generate comprehensive subqueries that will help gather all necessary information from the document collection.
+        You are an AI specialized in extracting search keywords. Your task is to:
+        1. Analyze the question and chat history
+        2. Extract 2-3 SHORT, focused search queries
+        3. Each query should:
+           - Be 3-5 words maximum
+           - Contain important keywords from the question
+           - Remove stop words and unnecessary context
+           - Focus on technical terms and specific entities
 
-        For the given question, generate at least 3 types of subqueries:
-        1. CONTEXT: Broader background information needed to understand the topic
-        2. DETAIL: Specific facts, figures, or data points
-        3. VERIFICATION: Cross-reference information or verify claims
+        FORMAT YOUR RESPONSE EXACTLY AS:
+        <queries>
+        query1
+        query2
+        query3
+        </queries>
 
-        Requirements:
-        - Each subquery must be focused and specific to the question
-        - Subqueries should cover different aspects of the question in few words
-        - Include importance level (5=highest, 1=lowest)
-        - Ensure subqueries are actually answerable from documents
-
-        Format your response EXACTLY as follows:
-        <subqueries>
-        type: context
-        importance: 5
-        query: your subquery here
-        ---
-        type: detail
-        importance: 4
-        query: your subquery here
-        ---
-        type: verification
-        importance: 3
-        query: your subquery here
-        </subqueries>
+        Example:
+        Question: "What are the environmental impacts of solar panel manufacturing?"
+        <queries>
+        solar panel manufacturing impact
+        solar environmental effects
+        panel production pollution
+        </queries>
         """
         
+        if self.memory:
+            context = "\nPrevious exchange:\n"
+            context += f"Q: {self.memory[-2]['content']}\n"
+            context += f"A: {self.memory[-1]['content']}"
+            prompt += context
+
         messages = [
             {"role": "system", "content": prompt},
             {"role": "user", "content": f"Question: {question}"}
@@ -168,73 +168,40 @@ class RagSystem:
                 model="gpt-4o-mini",
                 messages=messages,
                 temperature=0.2,
-                max_tokens=500
+                max_tokens=200
             )
             
-            return self._parse_subqueries(response.choices[0].message.content.strip())
+            queries = self._parse_queries(response.choices[0].message.content.strip())
+            queries.append(question)
+            return queries
             
         except Exception as e:
-            self.logger.error(f"Error generating subqueries: {str(e)}")
-            return [SubQuery(text=question, query_type=QueryType.DETAIL, importance=5)]
+            self.logger.error(f"Error generating queries: {str(e)}")
+            return [question]
 
-    def _parse_subqueries(self, content: str) -> List[SubQuery]:
-        subqueries = []
-        match = re.search(r'<subqueries>(.*?)</subqueries>', content, re.DOTALL)
-        if not match:
-            self.logger.error(f"No subqueries found in content: {content}")
-            return []
-            
-        blocks = [b.strip() for b in match.group(1).split('---') if b.strip()]
-        for block in blocks:
-            try:
-                type_match = re.search(r'type:\s*(context|detail|verification)', block, re.IGNORECASE)
-                importance_match = re.search(r'importance:\s*([1-5])', block)
-                query_match = re.search(r'query:\s*([^\n]+)', block)
-                
-                if all([type_match, importance_match, query_match]):
-                    query_type = type_match.group(1).upper()
-                    subqueries.append(SubQuery(
-                        text=query_match.group(1).strip(),
-                        query_type=QueryType[query_type],
-                        importance=int(importance_match.group(1))
-                    ))
-                else:
-                    self.logger.warning(f"Incomplete subquery block: {block}")
-            except Exception as e:
-                self.logger.error(f"Error parsing subquery block '{block}': {str(e)}")
-                continue
-                
-        if not subqueries:
-            self.logger.warning("No valid subqueries were parsed")
-            
-        return subqueries
+    def _parse_queries(self, content: str) -> List[str]:
+        queries = []
+        match = re.search(r'<queries>(.*?)</queries>', content, re.DOTALL)
+        if match:
+            queries = [q.strip() for q in match.group(1).strip().split('\n') if q.strip()]
+        return queries if queries else []
 
-    def chat(self, question: str, temperature: Optional[float] = None) -> Dict:
+    def chat(self, question: str) -> Dict:
+        if not self.settings:
+            raise RuntimeError("Settings not configured")
+
         try:
             updated_question = self._update_query(question)
-            subqueries = self._get_relevant_questions(updated_question)
+            search_queries = self._get_relevant_questions(updated_question)
             
-            subqueries.sort(key=lambda x: x.importance, reverse=True)
-            
-            self.logger.info("Generated subqueries:")
+            self.logger.info("Generated search queries:")
             all_relevant_docs = []
-            query_results = {}
-
-            search_config = Config(
-                use_semantic=True,
-                use_keyword=True,
-                use_knowledge_graph=True,
-                semantic_weight=0.3,
-                keyword_weight=0.4,
-                knowledge_graph_weight=0.3
-            )
             
-            for sq in subqueries:
-                docs = self.vector_db.search(sq.text, search_config, k=2)
+            for query in search_queries:
+                docs = self.vector_db.search(query, self.settings, k=2)
                 if docs:
-                    query_results[sq.text] = docs
                     all_relevant_docs.extend(docs)
-                self.logger.info(f" >>> query: {sq.text}\t docs: {len(docs)}")
+                self.logger.info(f" >>> query: {query}\t docs: {len(docs)}")
 
             if not all_relevant_docs:
                 return {
@@ -252,8 +219,8 @@ class RagSystem:
 
             context = self._format_context(unique_docs)
             system_message = self._get_system_prompt() + "\n\nQuery Analysis:\n"
-            for sq in subqueries:
-                system_message += f"\n{sq.query_type.value.title()} Query: {sq.text}"
+            for query in search_queries:
+                system_message += f"\nQuery: {query}"
 
             messages = [
                 {"role": "system", "content": system_message},
@@ -264,8 +231,8 @@ class RagSystem:
             response = self.client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=messages,
-                temperature=temperature or self.temperature,
-                max_tokens=2000
+                temperature=self.settings.temperature,
+                max_tokens=self.settings.max_token
             )
 
             answer = response.choices[0].message.content
@@ -289,11 +256,21 @@ class RagSystem:
     def clear_memory(self):
         self.memory = []
 
-    def set_temperature(self, temperature: float):
-        if 0 <= temperature <= 1:
-            self.temperature = temperature
-        else:
-            raise ValueError("Temperature must be between 0 and 1")
-
     def get_chat_history(self) -> List[Dict]:
         return self.memory
+
+    def update_settings(self, new_settings: SettingsConfig) -> None:
+        """Update system settings and validate the configuration."""
+        if not new_settings.validate_weights():
+            raise ValueError("Invalid settings: weights must sum to 1.0")
+        
+        self.settings = new_settings
+        self.logger.info("Settings updated successfully")
+        
+        if hasattr(self.vector_db, 'update_settings'):
+            self.vector_db.update_settings(new_settings)
+
+    def _reset_caches(self) -> None:
+        """Reset any caches that might be affected by settings changes."""
+        self.query_cache = {}
+        self.memory = []

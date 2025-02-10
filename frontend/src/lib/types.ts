@@ -212,6 +212,18 @@ export interface Report {
   updated_at: string;
 }
 
+// Rag Types
+export interface RagSettingConfig {
+  use_semantic: boolean;
+  use_keyword: boolean;
+  use_knowledge_graph: boolean;
+  semantic_weight: number;
+  keyword_weight: number;
+  knowledge_graph_weight: number;
+  temperature: number;
+  max_token: number;
+}
+
 export interface Source {
   title: string;
   similarity: string;
@@ -232,10 +244,13 @@ export interface ChatMessage {
 
 export interface RagSession {
   id: string;
+  user_id: string;
   title: string;
-  messages: ChatMessage[]; 
-  description: string;
+  api_key: string | null;
+  messages: ChatMessage[];
+  description: string | null;
   documents: string[];
   created_at: string;
   updated_at: string;
+  settings: RagSettingConfig;
 }

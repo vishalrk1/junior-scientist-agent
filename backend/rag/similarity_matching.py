@@ -11,20 +11,7 @@ import networkx as nx
 import numpy as np
 import spacy
 
-@dataclass
-class Config:
-    use_semantic: bool = True
-    use_keyword: bool = True
-    use_knowledge_graph: bool = True
-    semantic_weight: float = 0.4
-    keyword_weight: float = 0.3
-    knowledge_graph_weight: float = 0.3
-
-    def validate_weights(self) -> bool:
-        weights_sum = (self.semantic_weight * self.use_semantic + 
-                      self.keyword_weight * self.use_keyword + 
-                      self.knowledge_graph_weight * self.use_knowledge_graph)
-        return abs(weights_sum - 1.0) < 0.001
+from models.rag import SettingsConfig
 
 class SimilarityMatching:
     def __init__(self, api_key: str, db_path: Optional[str] = None):
@@ -218,13 +205,13 @@ class SimilarityMatching:
         
         return normalize(scores.reshape(-1, 1), norm='l2').flatten()
     
-    def search(self, query: str, config: Config, k: int = 3) -> List[Dict]:
+    def search(self, query: str, config: SettingsConfig, k: int = 3) -> List[Dict]:
         if not query:
             raise ValueError("Query cannot be empty")
         if k < 1:
             raise ValueError("k must be positive")
         if not config.validate_weights():
-            raise ValueError("Config weights must sum to 1.0")
+            raise ValueError("SettingsConfig weights must sum to 1.0")
         if not self.documents:
             raise RuntimeError("No documents loaded")
 
